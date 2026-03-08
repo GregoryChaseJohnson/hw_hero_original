@@ -1,0 +1,1172 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Three-Box Highlight: Replacement, Insert, Delete</title>
+  <link rel="stylesheet" href="/static/themes.css" />
+</head>
+<body>
+  <!-- Top bar -->
+  <div id="theme-bar">
+    <div id="hamburger-anchor">
+      <button id="hamburger-toggle" type="button" aria-haspopup="true" aria-expanded="false" aria-label="Open sidebar menu">
+        <span class="line"></span>
+        <span class="line middle"></span>
+        <span class="line"></span>
+      </button>
+      <div id="sidebar-panel" hidden>
+        <button id="sidebar-close" type="button" aria-label="Close sidebar menu">×</button>
+        <button id="sidebar-new-entry" class="sidebar-item" type="button">
+          <svg class="new-writing-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+            <path d="M8 3.5h8.2L20.5 7.8V20.5a1.5 1.5 0 0 1-1.5 1.5H8a1.5 1.5 0 0 1-1.5-1.5V5A1.5 1.5 0 0 1 8 3.5z"/>
+            <path d="M16.2 3.5V8h4.3"/>
+            <path d="M9.2 16.6l4.9-4.9 2.1 2.1-4.9 4.9-2.7.6z"/>
+          </svg>
+          <span class="label">New writing</span>
+        </button>
+        <button id="sidebar-entry" class="sidebar-item" type="button">
+          <span class="label">Your writings</span>
+          <span class="caret">&gt;</span>
+        </button>
+      </div>
+    </div>
+    <div id="menu-anchor" hidden>
+      <button id="menu-toggle" type="button" aria-haspopup="true" aria-expanded="false" aria-label="Open menu">
+        <span class="menu-dot"></span>
+        <span class="menu-dot"></span>
+        <span class="menu-dot"></span>
+      </button>
+      <div id="menu-dropdown" hidden>
+        <button id="menu-edit" type="button">Edit</button>
+      </div>
+    </div>
+  </div>
+  <div id="sidebar-scrim" hidden></div>
+  <!-- App containers -->
+  <div id="app">
+    <div id="upper-container"></div>
+    <div id="lower-container">
+        <div id="lower-header">
+          <button id="lower-toggle" type="button" aria-label="Expand lower panel" title="Pull up lower panel">
+            <svg class="chevron" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+              <path d="M6 14l6-6 6 6" />
+            </svg>
+          </button>
+        </div>
+        <div id="lower-content"></div> <!-- The rest of the lower container -->
+    </div>
+</div>
+
+  <script>
+    /********************************
+     * Data fetching
+     ********************************/
+    async function fetchData() {
+      try {
+        const response = await fetch("/data.json");
+        if (!response.ok) {
+          console.error("Failed to fetch /data.json");
+          return null;
+        }
+        return await response.json();
+      } catch (err) {
+        console.error("Error fetching data.json:", err);
+        return null;
+      }
+    }
+
+    async function fetchSentenceMapping() {
+      try {
+        const response = await fetch("/sentence_mapping.json");
+        if (!response.ok) {
+          console.error("Failed to fetch /sentence_mapping.json");
+          return null;
+        }
+        return await response.json();
+      } catch (err) {
+        console.error("Error fetching sentence_mapping.json:", err);
+        return null;
+      }
+    }
+    
+    /********************************
+     * Rendering Functions for Sentence Lines
+     ********************************/
+    function displayChar(tokens, idx) {
+      const token = tokens[idx] || {};
+      const ch = token.char;
+      if (ch !== '"') {
+        return ch;
+      }
+      const prev = idx > 0 ? (tokens[idx - 1].char || "") : "";
+      const next = idx + 1 < tokens.length ? (tokens[idx + 1].char || "") : "";
+      const next2 = idx + 2 < tokens.length ? (tokens[idx + 2].char || "") : "";
+      const isWordChar = c => /[A-Za-z0-9_]/.test(c);
+      if (isWordChar(prev) && isWordChar(next)) {
+        return "'";
+      }
+      // Plural possessive artifact: students" health -> students' health
+      if ((prev === "s" || prev === "S") && next === " " && /[A-Za-z]/.test(next2)) {
+        return "'";
+      }
+      return ch;
+    }
+
+    function tokenIsCorrected(token) {
+      if (!token) return false;
+      return (
+        token.replacementBlockId !== undefined ||
+        token.insertBlockId !== undefined ||
+        token.deleteBlockId !== undefined
+      );
+    }
+
+    function computeSharedSegments(sentence, maxCols) {
+      const finalTokens = sentence.final_sentence_tokens || [];
+      const annotatedTokens = sentence.annotated_tokens || [];
+      const totalLen = Math.max(finalTokens.length, annotatedTokens.length);
+      const width = Math.max(20, Number(maxCols) || totalLen || 20);
+      if (totalLen === 0) return [[0, 0]];
+
+      const charAt = (i) => {
+        const fromFinal = finalTokens[i] && typeof finalTokens[i].char === "string" ? finalTokens[i].char : "";
+        if (fromFinal) return fromFinal;
+        const fromAnnotated = annotatedTokens[i] && typeof annotatedTokens[i].char === "string" ? annotatedTokens[i].char : "";
+        return fromAnnotated || "";
+      };
+      const isWhitespace = (ch) => /\s/.test(ch || "");
+
+      const correctedMask = new Array(totalLen).fill(false);
+      for (let i = 0; i < totalLen; i += 1) {
+        correctedMask[i] = tokenIsCorrected(finalTokens[i]) || tokenIsCorrected(annotatedTokens[i]);
+      }
+
+      const protectedSpans = [];
+      let i = 0;
+      while (i < totalLen) {
+        if (!correctedMask[i]) {
+          i += 1;
+          continue;
+        }
+        const start = i;
+        while (i < totalLen && correctedMask[i]) i += 1;
+        protectedSpans.push([start, i]); // [start, end)
+      }
+
+      const insideProtectedSpan = (boundary) => {
+        for (let s = 0; s < protectedSpans.length; s += 1) {
+          const [start, end] = protectedSpans[s];
+          if (boundary > start && boundary < end) return true;
+        }
+        return false;
+      };
+
+      const isSpaceBoundary = (boundary) => (
+        boundary > 0 &&
+        boundary <= totalLen &&
+        isWhitespace(charAt(boundary - 1)) &&
+        (boundary === totalLen || !isWhitespace(charAt(boundary)))
+      );
+
+      const chooseBreak = (start) => {
+        if (start + width >= totalLen) return totalLen;
+        const ideal = Math.min(start + width, totalLen - 1);
+
+        // Greedy left scan: nearest prior space boundary, never inside protected spans.
+        for (let b = ideal; b > start; b -= 1) {
+          if (isSpaceBoundary(b) && !insideProtectedSpan(b)) {
+            return b;
+          }
+        }
+
+        // Fallback only when no left-space boundary exists: scan right for next space boundary.
+        for (let b = ideal + 1; b <= totalLen; b += 1) {
+          if (isSpaceBoundary(b) && !insideProtectedSpan(b)) {
+            return b;
+          }
+        }
+
+        // Hard fallback: no spaces available in remaining span (single long run).
+        let hard = Math.min(start + width, totalLen);
+        while (hard < totalLen && insideProtectedSpan(hard)) hard += 1;
+        if (hard <= start) hard = Math.min(start + 1, totalLen);
+        return hard;
+      };
+
+      const segments = [];
+      let start = 0;
+      while (start < totalLen) {
+        let end = chooseBreak(start);
+        if (end <= start) {
+          end = Math.min(start + width, totalLen);
+        }
+        segments.push([start, end]);
+        start = end;
+      }
+      return segments;
+    }
+
+    function renderFinalLine(sentence, container, segment, rowIndex) {
+      const finalLine = document.createElement("div");
+      finalLine.className = "final-line";
+      container.appendChild(finalLine);
+      const tokens = sentence.final_sentence_tokens || [];
+      const noStrikeReplacementBlockIds = new Set(
+        (sentence.replacement_blocks || [])
+          .filter(block => typeof block.replaced_text === "string" && block.replaced_text.trim().length === 0)
+          .map(block => String(block.block_index))
+      );
+      const insertBlockRanges = new Map(
+        (sentence.insert_blocks || []).map(block => [
+          String(block.insert_block_index),
+          { start: block.final_start, end: block.final_end }
+        ])
+      );
+
+      const [start, end] = segment;
+      for (let idx = start; idx < end; idx += 1) {
+        const token = tokens[idx];
+        const span = document.createElement("span");
+        span.className = "token " + ((token && token.type) || "");
+        const shownChar = displayChar(tokens, idx);
+        span.textContent = shownChar === " " ? "\u00A0" : shownChar;
+        span.dataset.index = token ? token.index : idx;
+        span.dataset.sentenceIdx = sentence.sentence_index;
+        span.dataset.rowIndex = String(rowIndex);
+        if (token && token.replacementBlockId !== undefined) {
+          span.dataset.replacementBlockId = token.replacementBlockId;
+          if (noStrikeReplacementBlockIds.has(String(token.replacementBlockId))) {
+            span.classList.add("no-strike");
+          }
+        }
+        if (token && token.insertBlockId !== undefined) {
+          const blockId = String(token.insertBlockId);
+          const range = insertBlockRanges.get(blockId);
+          const prev = idx > 0 ? tokens[idx - 1] : null;
+          const next = idx + 1 < tokens.length ? tokens[idx + 1] : null;
+          const isBoundarySpace = (
+            token.char === " " &&
+            range &&
+            (
+              (idx === range.start && prev && prev.type === "equal") ||
+              (idx === range.end && next && next.type === "equal")
+            )
+          );
+          if (!isBoundarySpace) {
+            span.dataset.insertBlockId = token.insertBlockId;
+          }
+        }
+        if (token && token.deleteBlockId !== undefined) {
+          span.dataset.deleteBlockId = token.deleteBlockId;
+        }
+        finalLine.appendChild(span);
+      }
+    }
+    
+    function renderAnnotatedLine(sentence, container, segment, rowIndex) {
+      const annotatedLine = document.createElement("div");
+      annotatedLine.className = "annotated-line";
+      container.appendChild(annotatedLine);
+      const tokens = sentence.annotated_tokens || [];
+
+      const [start, end] = segment;
+      for (let idx = start; idx < end; idx += 1) {
+        const token = tokens[idx];
+        const span = document.createElement("span");
+        span.className = "corrected-char";
+        const shownChar = displayChar(tokens, idx);
+        span.textContent = shownChar === " " ? "\u00A0" : shownChar;
+        span.dataset.index = token ? token.index : idx;
+        span.dataset.sentenceIdx = sentence.sentence_index;
+        span.dataset.rowIndex = String(rowIndex);
+        if (token && token.replacementBlockId !== undefined) {
+          span.dataset.replacementBlockId = token.replacementBlockId;
+        }
+        annotatedLine.appendChild(span);
+      }
+    }
+    
+    // Renders a sentence into a container element.
+    function renderSentence(sentence, options = {}) {
+      const container = document.createElement("div");
+      container.className = "sentence-container";
+      if (options.fixedWidthFromData !== false && typeof sentence.container_length === "number") {
+        container.style.width = sentence.container_length + "ch";
+      }
+      container.dataset.sentenceIndex = sentence.sentence_index;
+      const maxCols = options.wrapColumns || null;
+      const segments = computeSharedSegments(sentence, maxCols);
+      segments.forEach((segment, rowIndex) => {
+        renderFinalLine(sentence, container, segment, rowIndex);
+        renderAnnotatedLine(sentence, container, segment, rowIndex);
+      });
+      attachContainerClickHandler(container);
+      attachContainerHoverHandler(container);
+      return container;
+    }
+    
+    function createSeparatorLine() {
+      const sep = document.createElement("div");
+      sep.className = "separator-line";
+      return sep;
+    }
+    
+    /********************************
+     * Highlight Box Functions
+     ********************************/
+    function createBoxForLine(container, blockId, blockType, lineSelector) {
+      const allEls = container.querySelectorAll(
+        `${lineSelector}[data-${blockType}-block-id='${blockId}']`
+      );
+      if (!allEls.length) return;
+      const byRow = new Map();
+      allEls.forEach(el => {
+        const row = el.dataset.rowIndex || "0";
+        if (!byRow.has(row)) byRow.set(row, []);
+        byRow.get(row).push(el);
+      });
+
+      const containerRect = container.getBoundingClientRect();
+      byRow.forEach(rowEls => {
+        let minLeft = Infinity, maxRight = -Infinity;
+        let minTop = Infinity, maxBottom = -Infinity;
+        rowEls.forEach(el => {
+          const rect = el.getBoundingClientRect();
+          const left = rect.left - containerRect.left;
+          const right = rect.right - containerRect.left;
+          const top = rect.top - containerRect.top;
+          const bottom = rect.bottom - containerRect.top;
+          minLeft = Math.min(minLeft, left);
+          maxRight = Math.max(maxRight, right);
+          minTop = Math.min(minTop, top);
+          maxBottom = Math.max(maxBottom, bottom);
+        });
+        const margin = 0.8;
+        const boxLeft = minLeft - margin;
+        const boxTop = minTop - margin;
+        const boxWidth = (maxRight - minLeft) + margin * 2;
+        const boxHeight = (maxBottom - minTop) + margin * 2;
+        if (boxWidth <= 0 || boxHeight <= 0) return;
+        const highlightBox = document.createElement("div");
+        highlightBox.className = "highlight-box";
+        highlightBox.dataset[`${blockType}BlockId`] = blockId;
+        highlightBox.dataset.blockType = blockType;
+        highlightBox.dataset.blockIndex = blockId;
+        highlightBox.dataset.sentenceIndex = container.dataset.sentenceIndex;
+        highlightBox.style.left = `${boxLeft}px`;
+        highlightBox.style.top = `${boxTop}px`;
+        highlightBox.style.width = `${boxWidth}px`;
+        highlightBox.style.height = `${boxHeight}px`;
+        highlightBox.style.zIndex = "1";
+        container.appendChild(highlightBox);
+      });
+    }
+    
+    function createHighlightBoxesForContainer(container) {
+      const blockTypes = ["replacement", "insert", "delete"];
+      blockTypes.forEach(blockType => {
+        const tokens = container.querySelectorAll(`.final-line [data-${blockType}-block-id]`);
+        const blockIds = new Set();
+        tokens.forEach(token => {
+          blockIds.add(token.dataset[`${blockType}BlockId`]);
+        });
+        blockIds.forEach(blockId => {
+          if (blockType === "replacement") {
+            createBoxForLine(container, blockId, blockType, ".final-line .token");
+            createBoxForLine(container, blockId, blockType, ".annotated-line .corrected-char");
+          } else {
+            createBoxForLine(container, blockId, blockType, ".final-line .token");
+          }
+        });
+      });
+    }
+    
+    /********************************
+     * Event Delegation for Clicks and Hovers
+     ********************************/
+    function attachContainerClickHandler(container) {
+      container.addEventListener("click", function(e) {
+        let target = e.target;
+        while (target && target !== container) {
+          if (target.dataset.replacementBlockId !== undefined) {
+            handleHighlightClick({
+              blockType: "replacement",
+              blockIndex: target.dataset.replacementBlockId,
+              sentenceIndex: container.dataset.sentenceIndex
+            });
+            return;
+          }
+          if (target.dataset.insertBlockId !== undefined) {
+            handleHighlightClick({
+              blockType: "insert",
+              blockIndex: target.dataset.insertBlockId,
+              sentenceIndex: container.dataset.sentenceIndex
+            });
+            return;
+          }
+          if (target.dataset.deleteBlockId !== undefined) {
+            handleHighlightClick({
+              blockType: "delete",
+              blockIndex: target.dataset.deleteBlockId,
+              sentenceIndex: container.dataset.sentenceIndex
+            });
+            return;
+          }
+          target = target.parentNode;
+        }
+      });
+    }
+    
+    function attachContainerHoverHandler(container) {
+      container.addEventListener("mouseover", function(e) {
+        let target = e.target;
+        while (target && target !== container) {
+          if (target.dataset.replacementBlockId !== undefined) {
+            const blockId = target.dataset.replacementBlockId;
+            const relatedBoxes = container.querySelectorAll(`.highlight-box[data-replacement-block-id='${blockId}']`);
+            relatedBoxes.forEach(box => box.classList.add("hovered"));
+            break;
+          }
+          if (target.dataset.insertBlockId !== undefined) {
+            const blockId = target.dataset.insertBlockId;
+            const relatedBoxes = container.querySelectorAll(`.highlight-box[data-insert-block-id='${blockId}']`);
+            relatedBoxes.forEach(box => box.classList.add("hovered"));
+            break;
+          }
+          if (target.dataset.deleteBlockId !== undefined) {
+            const blockId = target.dataset.deleteBlockId;
+            const relatedBoxes = container.querySelectorAll(`.highlight-box[data-delete-block-id='${blockId}']`);
+            relatedBoxes.forEach(box => box.classList.add("hovered"));
+            break;
+          }
+          target = target.parentNode;
+        }
+      });
+      
+      container.addEventListener("mouseout", function() {
+        const hoveredBoxes = container.querySelectorAll(".highlight-box.hovered");
+        hoveredBoxes.forEach(box => box.classList.remove("hovered"));
+      });
+    }
+    
+    function escapeHtml(text) {
+      return (text || "")
+        .replaceAll("&", "&amp;")
+        .replaceAll("<", "&lt;")
+        .replaceAll(">", "&gt;");
+    }
+
+    function normalizeText(text) {
+      return (text || "").replace(/\s+/g, " ").trim().toLowerCase();
+    }
+
+    function applySafeQuoteHighlight(explanation, beforeText, afterText) {
+      const safeExplanation = escapeHtml(explanation || "");
+      const beforeNorm = normalizeText(beforeText);
+      const afterNorm = normalizeText(afterText);
+      const quoteRegex = /"([^"\n]{1,300})"/g;
+
+      let highlightedCount = 0;
+      return safeExplanation.replace(quoteRegex, (fullMatch, innerText) => {
+        if (highlightedCount >= 2) {
+          return fullMatch;
+        }
+
+        const innerNorm = normalizeText(innerText);
+        const containsBefore = beforeNorm && innerNorm.includes(beforeNorm);
+        const containsAfter = afterNorm && innerNorm.includes(afterNorm);
+
+        if (!containsBefore && !containsAfter) {
+          return fullMatch;
+        }
+
+        highlightedCount += 1;
+        return `<span class="highlighted-word">"${innerText}"</span>`;
+      });
+    }
+
+    function handleHighlightClick(payload) {
+      console.log("Highlight clicked:", payload);
+      // Clear previous explanation immediately
+      const upperContainer = document.getElementById("upper-container");
+      isEditMode = false;
+      upperContainerSnapshot = null;
+      upperContainer.classList.remove("ocr-edit-mode");
+      upperContainer.onclick = null;
+      upperContainer.ondblclick = null;
+      upperContainer.innerHTML = "";
+      setUpperPopulatedState(false);
+      
+      fetch('/highlight_click', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      })
+      .then(async res => {
+        const body = await res.json().catch(() => ({}));
+        if (!res.ok) {
+          const msg = body.error || `Request failed (${res.status})`;
+          throw new Error(msg);
+        }
+        return body;
+      })
+      .then(response => {
+        console.log('Highlight click response:', response);
+
+        const explanation = response.explanation || "";
+        const beforeText = response.before_text || "";
+        const afterText = response.after_text || "";
+
+        upperContainer.innerHTML = explanation
+          ? applySafeQuoteHighlight(explanation, beforeText, afterText)
+          : "No explanation returned by backend.";
+        scheduleUpperPanelAutoState();
+
+      })
+      .catch(err => {
+        console.error('Error in highlight click:', err);
+        upperContainer.textContent = `Explanation error: ${err.message}`;
+        scheduleUpperPanelAutoState();
+      });
+    }
+    
+    let sentenceDataArray = [];
+    let sentenceMappingArray = [];
+    let isEditMode = false;
+    let isComposeMode = false;
+    let isUpperPopulated = false;
+    let isLowerExpanded = false;
+    const AUTO_RECEDE_MARGIN_PX = 10;
+    let upperContainerSnapshot = null;
+
+    function setEditMenuVisibility(visible) {
+      const anchor = document.getElementById("menu-anchor");
+      const toggle = document.getElementById("menu-toggle");
+      const dropdown = document.getElementById("menu-dropdown");
+      if (!visible) {
+        dropdown.hidden = true;
+        toggle.setAttribute("aria-expanded", "false");
+      }
+      anchor.hidden = !visible;
+    }
+
+    function syncEditMenuVisibilityFromLowerContent() {
+      const lowerContent = document.getElementById("lower-content");
+      const hasRows = lowerContent && lowerContent.childElementCount > 0;
+      setEditMenuVisibility(Boolean(hasRows && !isComposeMode));
+    }
+
+    function exitComposeMode() {
+      const appEl = document.getElementById("app");
+      const upperContainer = document.getElementById("upper-container");
+      isComposeMode = false;
+      appEl.classList.remove("compose-mode");
+      document.querySelectorAll(".compose-actions").forEach((el) => el.remove());
+      upperContainer.classList.remove("ocr-edit-mode");
+      upperContainer.innerHTML = "";
+    }
+
+    function clearComposeUiIfResultsPresent() {
+      const lowerContent = document.getElementById("lower-content");
+      const hasRows = lowerContent && lowerContent.childElementCount > 0;
+      if (!hasRows) return;
+      document.querySelectorAll(".compose-submit-button").forEach((btn) => {
+        btn.disabled = false;
+        btn.textContent = "Analyze";
+      });
+      exitComposeMode();
+    }
+
+    function initMenu() {
+      const toggle = document.getElementById("menu-toggle");
+      const dropdown = document.getElementById("menu-dropdown");
+      const editBtn = document.getElementById("menu-edit");
+
+      function closeMenu() {
+        dropdown.hidden = true;
+        toggle.setAttribute("aria-expanded", "false");
+      }
+
+      toggle.addEventListener("click", (e) => {
+        e.stopPropagation();
+        const willOpen = dropdown.hidden;
+        dropdown.hidden = !willOpen;
+        toggle.setAttribute("aria-expanded", willOpen ? "true" : "false");
+      });
+
+      editBtn.addEventListener("click", () => {
+        if (!isEditMode) {
+          snapshotUpperContainerState();
+        }
+        isEditMode = true;
+        closeMenu();
+        renderOcrEditView();
+      });
+
+      document.addEventListener("click", (e) => {
+        if (!document.getElementById("menu-anchor").contains(e.target)) {
+          closeMenu();
+        }
+      });
+    }
+
+    function initSidebarMenu() {
+      const toggle = document.getElementById("hamburger-toggle");
+      const panel = document.getElementById("sidebar-panel");
+      const newWritingBtn = document.getElementById("sidebar-new-entry");
+      const closeBtn = document.getElementById("sidebar-close");
+      const scrim = document.getElementById("sidebar-scrim");
+
+      function closePanel() {
+        panel.hidden = true;
+        scrim.hidden = true;
+        toggle.setAttribute("aria-expanded", "false");
+      }
+
+      function openPanel() {
+        panel.hidden = false;
+        scrim.hidden = false;
+        toggle.setAttribute("aria-expanded", "true");
+      }
+
+      toggle.addEventListener("click", (e) => {
+        e.stopPropagation();
+        if (panel.hidden) {
+          openPanel();
+        } else {
+          closePanel();
+        }
+      });
+
+      document.addEventListener("click", (e) => {
+        if (!document.getElementById("hamburger-anchor").contains(e.target)) {
+          closePanel();
+        }
+      });
+
+      closeBtn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        closePanel();
+      });
+
+      scrim.addEventListener("click", () => {
+        closePanel();
+      });
+
+      newWritingBtn.addEventListener("click", () => {
+        closePanel();
+        renderComposeView();
+      });
+    }
+
+    function applyPanelState() {
+      const appEl = document.getElementById("app");
+      const toggleBtn = document.getElementById("lower-toggle");
+      const toggleSurface = document.getElementById("lower-header");
+      appEl.classList.toggle("upper-populated", isUpperPopulated);
+      appEl.classList.toggle("lower-expanded", isUpperPopulated && isLowerExpanded);
+      toggleBtn.classList.toggle("expanded", isUpperPopulated && isLowerExpanded);
+      toggleBtn.setAttribute("aria-hidden", isUpperPopulated ? "false" : "true");
+      toggleBtn.tabIndex = isUpperPopulated ? 0 : -1;
+      toggleSurface.tabIndex = isUpperPopulated ? 0 : -1;
+      toggleSurface.setAttribute("aria-disabled", isUpperPopulated ? "false" : "true");
+      toggleBtn.setAttribute(
+        "aria-label",
+        (isUpperPopulated && isLowerExpanded) ? "Collapse lower panel" : "Expand lower panel"
+      );
+      toggleBtn.title = (isUpperPopulated && isLowerExpanded) ? "Push down lower panel" : "Pull up lower panel";
+    }
+
+    function setUpperPopulatedState(populated) {
+      isUpperPopulated = Boolean(populated);
+      if (!isUpperPopulated) {
+        isLowerExpanded = false;
+      }
+      applyPanelState();
+    }
+
+    function snapshotUpperContainerState() {
+      const upperContainer = document.getElementById("upper-container");
+      upperContainerSnapshot = {
+        html: upperContainer.innerHTML,
+        hadEditClass: upperContainer.classList.contains("ocr-edit-mode"),
+        onclick: upperContainer.onclick,
+        ondblclick: upperContainer.ondblclick,
+        upperPopulated: isUpperPopulated,
+        lowerExpanded: isLowerExpanded,
+      };
+    }
+
+    function closeEditModeAndRestore() {
+      if (!upperContainerSnapshot) return;
+      const upperContainer = document.getElementById("upper-container");
+      const snapshot = upperContainerSnapshot;
+      isEditMode = false;
+      upperContainer.innerHTML = snapshot.html;
+      upperContainer.classList.toggle("ocr-edit-mode", snapshot.hadEditClass);
+      upperContainer.onclick = snapshot.onclick || null;
+      upperContainer.ondblclick = snapshot.ondblclick || null;
+      isUpperPopulated = snapshot.upperPopulated;
+      isLowerExpanded = snapshot.lowerExpanded;
+      applyPanelState();
+      upperContainerSnapshot = null;
+    }
+
+    function updateUpperPanelAutoState() {
+      const upperContainer = document.getElementById("upper-container");
+      if (!upperContainer) return;
+      const hasText = Boolean((upperContainer.textContent || "").trim());
+      if (!hasText) {
+        setUpperPopulatedState(false);
+        return;
+      }
+      const overflowPx = upperContainer.scrollHeight - upperContainer.clientHeight;
+      setUpperPopulatedState(overflowPx >= AUTO_RECEDE_MARGIN_PX);
+    }
+
+    function scheduleUpperPanelAutoState() {
+      window.requestAnimationFrame(updateUpperPanelAutoState);
+    }
+
+    function initLowerToggle() {
+      const toggleSurface = document.getElementById("lower-header");
+      const toggleLowerPanel = () => {
+        if (!isUpperPopulated) return;
+        isLowerExpanded = !isLowerExpanded;
+        applyPanelState();
+      };
+      toggleSurface.addEventListener("click", () => {
+        toggleLowerPanel();
+      });
+      toggleSurface.addEventListener("keydown", (event) => {
+        if (event.key === "Enter" || event.key === " ") {
+          event.preventDefault();
+          toggleLowerPanel();
+        }
+      });
+      applyPanelState();
+    }
+
+    function getCaretTextOffset(el) {
+      const sel = window.getSelection();
+      if (!sel || sel.rangeCount === 0) return 0;
+      const range = sel.getRangeAt(0);
+      if (!el.contains(range.startContainer)) return 0;
+      const preRange = range.cloneRange();
+      preRange.selectNodeContents(el);
+      preRange.setEnd(range.startContainer, range.startOffset);
+      return preRange.toString().length;
+    }
+
+    function setCaretTextOffset(el, offset) {
+      const targetOffset = Math.max(0, offset);
+      const sel = window.getSelection();
+      if (!sel) return;
+      const range = document.createRange();
+      let remaining = targetOffset;
+      let placed = false;
+
+      const walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT);
+      let node = walker.nextNode();
+      while (node) {
+        const len = node.textContent ? node.textContent.length : 0;
+        if (remaining <= len) {
+          range.setStart(node, remaining);
+          placed = true;
+          break;
+        }
+        remaining -= len;
+        node = walker.nextNode();
+      }
+
+      if (!placed) {
+        range.selectNodeContents(el);
+        range.collapse(false);
+      } else {
+        range.collapse(true);
+      }
+      sel.removeAllRanges();
+      sel.addRange(range);
+    }
+
+    function getSelectionOffsets(el) {
+      const sel = window.getSelection();
+      if (!sel || sel.rangeCount === 0) return null;
+      const range = sel.getRangeAt(0);
+      if (!el.contains(range.startContainer)) return null;
+      const startRange = range.cloneRange();
+      startRange.selectNodeContents(el);
+      startRange.setEnd(range.startContainer, range.startOffset);
+      const endRange = range.cloneRange();
+      endRange.selectNodeContents(el);
+      endRange.setEnd(range.endContainer, range.endOffset);
+      return { start: startRange.toString().length, end: endRange.toString().length };
+    }
+
+    function transferTouchedMask(prevText, currText, prevMask) {
+      const oldText = prevText || "";
+      const newText = currText || "";
+      const oldMask = Array.isArray(prevMask) ? prevMask : [];
+
+      let prefix = 0;
+      const maxPrefix = Math.min(oldText.length, newText.length);
+      while (prefix < maxPrefix && oldText[prefix] === newText[prefix]) {
+        prefix += 1;
+      }
+
+      let suffix = 0;
+      const maxSuffix = Math.min(oldText.length - prefix, newText.length - prefix);
+      while (
+        suffix < maxSuffix &&
+        oldText[oldText.length - 1 - suffix] === newText[newText.length - 1 - suffix]
+      ) {
+        suffix += 1;
+      }
+
+      const newMask = new Array(newText.length).fill(false);
+      for (let i = 0; i < prefix; i += 1) {
+        newMask[i] = Boolean(oldMask[i]);
+      }
+      for (let i = 0; i < suffix; i += 1) {
+        const oldIdx = oldText.length - suffix + i;
+        const newIdx = newText.length - suffix + i;
+        newMask[newIdx] = Boolean(oldMask[oldIdx]);
+      }
+      return newMask;
+    }
+
+    function markTouchedRange(mask, start, end) {
+      if (!Array.isArray(mask) || mask.length === 0) return;
+      const a = Math.max(0, Math.min(start, mask.length - 1));
+      const b = Math.max(a + 1, Math.min(end, mask.length));
+      for (let i = a; i < b; i += 1) {
+        mask[i] = true;
+      }
+    }
+
+    function renderMaskHtml(text, mask) {
+      const value = text || "";
+      if (!value) return "";
+      let out = "";
+      let open = false;
+      for (let i = 0; i < value.length; i += 1) {
+        const isTouched = Boolean(mask && mask[i]);
+        if (isTouched && !open) {
+          out += '<span class="edited-fragment">';
+          open = true;
+        } else if (!isTouched && open) {
+          out += "</span>";
+          open = false;
+        }
+        out += escapeHtml(value[i]);
+      }
+      if (open) out += "</span>";
+      return out;
+    }
+
+    function refreshEditableDiff(lineTextEl) {
+      const original = lineTextEl.dataset.originalText || "";
+      const current = lineTextEl.textContent || "";
+      const prevText = lineTextEl.dataset.prevText || "";
+      const prevMask = JSON.parse(lineTextEl.dataset.touchedMask || "[]");
+      const caretOffset = getCaretTextOffset(lineTextEl);
+      const newMask = transferTouchedMask(prevText, current, prevMask);
+      const prevTrimLen = prevText.replace(/\s+$/g, "").length;
+
+      const pending = lineTextEl._pendingInput || null;
+      if (pending) {
+        const insertedLen = pending.data ? pending.data.length : 0;
+        if (insertedLen > 0) {
+          const insertedText = pending.data || "";
+          const whitespaceOnly = /^\s+$/.test(insertedText);
+          const beyondSentenceEnd = pending.start >= prevTrimLen;
+          if (!(whitespaceOnly && beyondSentenceEnd)) {
+            markTouchedRange(newMask, pending.start, pending.start + insertedLen);
+          }
+        }
+      }
+
+      // If the sentence is back to its original content (ignoring trailing whitespace),
+      // clear edit highlighting and revert row state to non-edited.
+      const originalTrimEnd = original.replace(/\s+$/g, "");
+      const currentTrimEnd = current.replace(/\s+$/g, "");
+      const matchesOriginal = currentTrimEnd === originalTrimEnd;
+      if (matchesOriginal) {
+        for (let i = 0; i < newMask.length; i += 1) {
+          newMask[i] = false;
+        }
+      }
+
+      lineTextEl.innerHTML = renderMaskHtml(current, newMask);
+      lineTextEl.dataset.prevText = current;
+      lineTextEl.dataset.touchedMask = JSON.stringify(newMask);
+      const hasEdits = !matchesOriginal;
+      const lineEl = lineTextEl.parentElement;
+      if (lineEl) {
+        lineEl.classList.toggle("edit-dirty", hasEdits);
+      }
+      setCaretTextOffset(lineTextEl, caretOffset);
+      lineTextEl._pendingInput = null;
+    }
+
+    function renderOcrEditView() {
+      const upperContainer = document.getElementById("upper-container");
+      isComposeMode = false;
+      document.getElementById("app").classList.remove("compose-mode");
+      upperContainer.innerHTML = "";
+      upperContainer.classList.add("ocr-edit-mode");
+      const wrapperEl = document.createElement("div");
+      wrapperEl.className = "ocr-edit-wrapper";
+      const toolbarEl = document.createElement("div");
+      toolbarEl.className = "ocr-edit-toolbar";
+      const closeBtn = document.createElement("button");
+      closeBtn.className = "ocr-close-button";
+      closeBtn.type = "button";
+      closeBtn.setAttribute("aria-label", "Close edit mode");
+      closeBtn.textContent = "×";
+      const saveBtn = document.createElement("button");
+      saveBtn.className = "ocr-save-button";
+      saveBtn.type = "button";
+      saveBtn.textContent = "Save";
+      toolbarEl.appendChild(closeBtn);
+      toolbarEl.appendChild(saveBtn);
+      const contentEl = document.createElement("div");
+      contentEl.className = "ocr-edit-content";
+      wrapperEl.appendChild(toolbarEl);
+      wrapperEl.appendChild(contentEl);
+      upperContainer.appendChild(wrapperEl);
+
+      sentenceMappingArray.forEach((item) => {
+        const lineEl = document.createElement("div");
+        lineEl.className = "ocr-edit-line";
+        lineEl.dataset.sentenceIndex = String(item.sentence_index);
+        const lineTextEl = document.createElement("div");
+        lineTextEl.className = "ocr-edit-line-text";
+        lineTextEl.setAttribute("contenteditable", "true");
+        lineTextEl.setAttribute("spellcheck", "false");
+        lineTextEl.dataset.originalText = item.ocr_sentence || "";
+        lineTextEl.dataset.prevText = item.ocr_sentence || "";
+        lineTextEl.dataset.touchedMask = JSON.stringify(new Array((item.ocr_sentence || "").length).fill(false));
+
+        const sentenceText = item.ocr_sentence || "";
+        lineTextEl.textContent = sentenceText;
+        lineTextEl.addEventListener("beforeinput", (event) => {
+          const offsets = getSelectionOffsets(lineTextEl);
+          if (!offsets) return;
+          lineTextEl._pendingInput = {
+            start: offsets.start,
+            end: offsets.end,
+            data: event.data || "",
+            inputType: event.inputType || "",
+          };
+        });
+        lineTextEl.addEventListener("input", () => {
+          refreshEditableDiff(lineTextEl);
+        });
+
+        lineEl.appendChild(lineTextEl);
+        contentEl.appendChild(lineEl);
+      });
+
+      saveBtn.addEventListener("click", () => {
+        const lineEls = Array.from(contentEl.querySelectorAll(".ocr-edit-line-text"));
+        const editedLines = lineEls
+          .map((el) => ({
+            sentence_index: Number(el.parentElement?.dataset.sentenceIndex || -1),
+            ocr_sentence: el.textContent || "",
+            el,
+          }))
+          .filter((row) => row.sentence_index >= 0);
+
+        const byIndex = new Map(editedLines.map((row) => [row.sentence_index, row.ocr_sentence]));
+        sentenceMappingArray = sentenceMappingArray.map((entry) => {
+          if (!byIndex.has(entry.sentence_index)) return entry;
+          return { ...entry, ocr_sentence: byIndex.get(entry.sentence_index) };
+        });
+
+        saveBtn.classList.add("saved");
+        saveBtn.textContent = "Saved";
+        window.setTimeout(() => {
+          saveBtn.classList.remove("saved");
+          saveBtn.textContent = "Save";
+        }, 1200);
+      });
+      closeBtn.addEventListener("click", () => {
+        closeEditModeAndRestore();
+      });
+
+      upperContainer.onclick = null;
+      upperContainer.ondblclick = null;
+      scheduleUpperPanelAutoState();
+    }
+
+    function moveCaretToStart(el) {
+      if (typeof el.setSelectionRange === "function") {
+        el.setSelectionRange(0, 0);
+        return;
+      }
+      const range = document.createRange();
+      const sel = window.getSelection();
+      range.selectNodeContents(el);
+      range.collapse(true);
+      sel.removeAllRanges();
+      sel.addRange(range);
+    }
+
+    function renderComposeView() {
+      const appEl = document.getElementById("app");
+      const upperContainer = document.getElementById("upper-container");
+      isComposeMode = true;
+      isEditMode = false;
+      appEl.classList.add("compose-mode");
+      setEditMenuVisibility(false);
+      upperContainer.innerHTML = "";
+      upperContainer.classList.add("ocr-edit-mode");
+
+      const wrapperEl = document.createElement("div");
+      wrapperEl.className = "ocr-edit-wrapper compose-wrapper";
+      const actionsEl = document.createElement("div");
+      actionsEl.className = "compose-actions";
+      const clearBtn = document.createElement("button");
+      clearBtn.className = "compose-clear-button";
+      clearBtn.type = "button";
+      clearBtn.setAttribute("aria-label", "Clear writing");
+      clearBtn.textContent = "×";
+      const submitBtn = document.createElement("button");
+      submitBtn.className = "compose-submit-button";
+      submitBtn.type = "button";
+      submitBtn.textContent = "Analyze";
+      actionsEl.appendChild(clearBtn);
+      actionsEl.appendChild(submitBtn);
+      const contentEl = document.createElement("div");
+      contentEl.className = "ocr-edit-content";
+      const inputEl = document.createElement("textarea");
+      inputEl.className = "compose-input";
+      inputEl.setAttribute("spellcheck", "false");
+      inputEl.setAttribute("aria-label", "New writing text input");
+      inputEl.setAttribute("placeholder", "Start writing");
+      inputEl.rows = 14;
+
+      const resizeComposeInput = () => {
+        const minHeightPx = 420;
+        inputEl.style.height = "auto";
+        inputEl.style.height = `${Math.max(minHeightPx, inputEl.scrollHeight)}px`;
+      };
+
+      inputEl.addEventListener("input", () => {
+        resizeComposeInput();
+      });
+
+      inputEl.addEventListener("keydown", (event) => {
+        if ((event.metaKey || event.ctrlKey) && event.key === "Enter") {
+          event.preventDefault();
+          submitBtn.click();
+        }
+      });
+
+      submitBtn.addEventListener("click", async () => {
+        const submittedText = (inputEl.value || "").replace(/\u200B/g, "").trim();
+        if (!submittedText) {
+          inputEl.focus();
+          return;
+        }
+        submitBtn.disabled = true;
+        submitBtn.textContent = "Analyzing...";
+        try {
+          const res = await fetch("/analyze_text", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ submitted_text: submittedText }),
+          });
+          const body = await res.json().catch(() => ({}));
+          if (!res.ok) {
+            throw new Error(body.error || body.details || `Request failed (${res.status})`);
+          }
+          exitComposeMode();
+          await renderApp();
+        } catch (err) {
+          console.error("analyze_text failed:", err);
+        } finally {
+          submitBtn.disabled = false;
+          submitBtn.textContent = "Analyze";
+        }
+      });
+
+      clearBtn.addEventListener("click", () => {
+        inputEl.value = "";
+        resizeComposeInput();
+        inputEl.focus();
+        moveCaretToStart(inputEl);
+      });
+
+      contentEl.appendChild(inputEl);
+      wrapperEl.appendChild(contentEl);
+      document.querySelectorAll(".compose-actions").forEach((el) => el.remove());
+      wrapperEl.appendChild(actionsEl);
+      upperContainer.appendChild(wrapperEl);
+
+      setUpperPopulatedState(false);
+      window.requestAnimationFrame(() => {
+        resizeComposeInput();
+        inputEl.focus();
+        moveCaretToStart(inputEl);
+      });
+    }
+    
+    /********************************
+     * Render Lower Container (Selectable Sentences)
+     ********************************/
+     function renderLowerContainer() {
+      const lowerContent = document.getElementById("lower-content");
+      lowerContent.innerHTML = "";
+      const availablePx = Math.max(320, lowerContent.clientWidth || window.innerWidth);
+      const approxCharPx = 11;
+      const wrapColumns = Math.max(24, Math.floor((availablePx - 40) / approxCharPx));
+      sentenceDataArray.forEach(sentence => {
+          let sentenceEl = renderSentence(sentence, {
+            wrapColumns,
+            fixedWidthFromData: false
+          });
+          sentenceEl.appendChild(createSeparatorLine());
+          lowerContent.appendChild(sentenceEl);
+          createHighlightBoxesForContainer(sentenceEl);
+      });
+      clearComposeUiIfResultsPresent();
+      syncEditMenuVisibilityFromLowerContent();
+  }
+
+    
+    async function renderApp() {
+      const data = await fetchData();
+      const mappingData = await fetchSentenceMapping();
+      if (!data || !Array.isArray(data.sentences)) {
+        console.error("No valid sentences found.");
+        setEditMenuVisibility(false);
+        return;
+      }
+      exitComposeMode();
+      sentenceDataArray = data.sentences;
+      sentenceMappingArray = mappingData && Array.isArray(mappingData.sentences)
+        ? mappingData.sentences
+        : [];
+      renderLowerContainer();
+      scheduleUpperPanelAutoState();
+      if (isEditMode) {
+        renderOcrEditView();
+      }
+    }
+    
+    initMenu();
+    initSidebarMenu();
+    initLowerToggle();
+    renderComposeView();
+    window.addEventListener("resize", () => {
+      if (!isComposeMode) {
+        renderApp();
+        scheduleUpperPanelAutoState();
+      }
+    });
+    
+  </script>
+</body>
+</html>

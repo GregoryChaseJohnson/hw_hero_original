@@ -1,0 +1,33 @@
+Summary of the Plan
+Tokenization
+
+Parse the text into tokens with associated colors (red, green, or normal).
+Each token represents a character and its formatting.
+Block Creation
+
+Identify and group tokens into blocks:
+Replace Blocks: Red token followed by green tokens until a non-green token appears.
+Insert Blocks: Contiguous green tokens until a non-green token appears.
+Delete Blocks: Contiguous red tokens until a non-red token appears.
+Normal Blocks: Remaining text, divided into:
+Leave-In Text: Contiguous normal text > 8 characters.
+Ride-Along Text: Contiguous normal text ≤ 8 characters.
+Gather Metadata
+
+For each block:
+Replace Blocks:
+Store green text as short_correction and long_correction (add ride-along text if applicable).
+Define anchor_point (first red character), red_end, and lower_measure.
+Insert Blocks:
+Store green text as short_correction and long_correction.
+Define anchor_point (first green character) and lower_measure.
+Render Phase
+
+Place corrections above the original text:
+If no ride-along text: Insert short_correction above anchor_point unless previous corrections overrun.
+If ride-along text exists: Calculate upper_measure and compare to lower_measure to decide placement.
+Adjust positions dynamically to avoid overlaps or gaps.
+Final Output
+
+Original sentence with corrections removed.
+A new line with corrections inserted at the calculated positions.

@@ -1,0 +1,514 @@
+[
+    {
+        "sentence_index": 1,
+        "type": "replace",
+        "anchor": 41,
+        "red_end": 46,
+        "incorrect_text": "singer",
+        "correct_text": "singers",
+        "ride_along_eligible": false,
+        "ride_along_end": null
+    },
+    {
+        "sentence_index": 2,
+        "type": "insert",
+        "anchor": 49,
+        "correct_text": "it",
+        "ride_along_eligible": true,
+        "ride_along_end": 55
+    },
+    {
+        "sentence_index": 2,
+        "type": "insert",
+        "anchor": 55,
+        "correct_text": "being",
+        "ride_along_eligible": false,
+        "ride_along_end": null
+    },
+    {
+        "sentence_index": 3,
+        "type": "insert",
+        "anchor": 19,
+        "correct_text": "being",
+        "ride_along_eligible": false,
+        "ride_along_end": null
+    },
+    {
+        "sentence_index": 3,
+        "type": "replace",
+        "anchor": 72,
+        "red_end": 84,
+        "incorrect_text": "K-pop music's",
+        "correct_text": "its",
+        "ride_along_eligible": false,
+        "ride_along_end": null
+    },
+    {
+        "sentence_index": 3,
+        "type": "replace",
+        "anchor": 120,
+        "red_end": 122,
+        "incorrect_text": "the",
+        "correct_text": "negative",
+        "ride_along_eligible": false,
+        "ride_along_end": null
+    },
+    {
+        "sentence_index": 3,
+        "type": "replace",
+        "anchor": 124,
+        "red_end": 133,
+        "incorrect_text": "bad effect",
+        "correct_text": "effects",
+        "ride_along_eligible": false,
+        "ride_along_end": null
+    },
+    {
+        "sentence_index": 4,
+        "type": "replace",
+        "anchor": 5,
+        "red_end": 7,
+        "incorrect_text": "for",
+        "correct_text": "in",
+        "ride_along_eligible": false,
+        "ride_along_end": null
+    },
+    {
+        "sentence_index": 4,
+        "type": "replace",
+        "anchor": 69,
+        "red_end": 74,
+        "incorrect_text": "effect",
+        "correct_text": "effects",
+        "ride_along_eligible": false,
+        "ride_along_end": null
+    },
+    {
+        "sentence_index": 6,
+        "type": "insert",
+        "anchor": 23,
+        "correct_text": "a",
+        "ride_along_eligible": true,
+        "ride_along_end": 42
+    },
+    {
+        "sentence_index": 6,
+        "type": "replace",
+        "anchor": 66,
+        "red_end": 69,
+        "incorrect_text": "test",
+        "correct_text": "tests",
+        "ride_along_eligible": false,
+        "ride_along_end": null
+    },
+    {
+        "sentence_index": 7,
+        "type": "replace",
+        "anchor": 17,
+        "red_end": 19,
+        "incorrect_text": "get",
+        "correct_text": "feel",
+        "ride_along_eligible": false,
+        "ride_along_end": null
+    },
+    {
+        "sentence_index": 7,
+        "type": "replace",
+        "anchor": 21,
+        "red_end": 26,
+        "incorrect_text": "rested",
+        "correct_text": "better",
+        "ride_along_eligible": true,
+        "ride_along_end": 31
+    },
+    {
+        "sentence_index": 7,
+        "type": "replace",
+        "anchor": 31,
+        "red_end": 37,
+        "incorrect_text": "hearing",
+        "correct_text": "listening to",
+        "ride_along_eligible": true,
+        "ride_along_end": 55
+    },
+    {
+        "sentence_index": 7,
+        "type": "replace",
+        "anchor": 55,
+        "red_end": 61,
+        "incorrect_text": "getting",
+        "correct_text": "finding",
+        "ride_along_eligible": true,
+        "ride_along_end": 68
+    },
+    {
+        "sentence_index": 7,
+        "type": "replace",
+        "anchor": 68,
+        "red_end": 69,
+        "incorrect_text": "by",
+        "correct_text": "in",
+        "ride_along_eligible": false,
+        "ride_along_end": null
+    },
+    {
+        "sentence_index": 8,
+        "type": "insert",
+        "anchor": 13,
+        "correct_text": "the",
+        "ride_along_eligible": false,
+        "ride_along_end": null
+    },
+    {
+        "sentence_index": 8,
+        "type": "replace",
+        "anchor": 47,
+        "red_end": 50,
+        "incorrect_text": "hard",
+        "correct_text": "a tough",
+        "ride_along_eligible": true,
+        "ride_along_end": 57
+    },
+    {
+        "sentence_index": 8,
+        "type": "replace",
+        "anchor": 57,
+        "red_end": 58,
+        "incorrect_text": "by",
+        "correct_text": "with",
+        "ride_along_eligible": false,
+        "ride_along_end": null
+    },
+    {
+        "sentence_index": 8,
+        "type": "replace",
+        "anchor": 60,
+        "red_end": 62,
+        "incorrect_text": "its",
+        "correct_text": "all",
+        "ride_along_eligible": false,
+        "ride_along_end": null
+    },
+    {
+        "sentence_index": 8,
+        "type": "replace",
+        "anchor": 64,
+        "red_end": 73,
+        "incorrect_text": "regulation",
+        "correct_text": "the regulations",
+        "ride_along_eligible": false,
+        "ride_along_end": null
+    },
+    {
+        "sentence_index": 9,
+        "type": "insert",
+        "anchor": 9,
+        "correct_text": "I heard",
+        "ride_along_eligible": true,
+        "ride_along_end": 22
+    },
+    {
+        "sentence_index": 9,
+        "type": "replace",
+        "anchor": 22,
+        "red_end": 38,
+        "incorrect_text": "named 'permission",
+        "correct_text": "\"Permission",
+        "ride_along_eligible": true,
+        "ride_along_end": 43
+    },
+    {
+        "sentence_index": 9,
+        "type": "replace",
+        "anchor": 43,
+        "red_end": 48,
+        "incorrect_text": "dance'",
+        "correct_text": "Dance",
+        "ride_along_eligible": true,
+        "ride_along_end": 54
+    },
+    {
+        "sentence_index": 9,
+        "type": "replace",
+        "anchor": 54,
+        "red_end": 56,
+        "incorrect_text": "can",
+        "correct_text": "felt",
+        "ride_along_eligible": false,
+        "ride_along_end": null
+    },
+    {
+        "sentence_index": 9,
+        "type": "replace",
+        "anchor": 58,
+        "red_end": 61,
+        "incorrect_text": "feel",
+        "correct_text": "hopeful about",
+        "ride_along_eligible": true,
+        "ride_along_end": 67
+    },
+    {
+        "sentence_index": 9,
+        "type": "replace",
+        "anchor": 67,
+        "red_end": 70,
+        "incorrect_text": "hope",
+        "correct_text": "end",
+        "ride_along_eligible": false,
+        "ride_along_end": null
+    },
+    {
+        "sentence_index": 9,
+        "type": "replace",
+        "anchor": 72,
+        "red_end": 77,
+        "incorrect_text": "to end",
+        "correct_text": "of",
+        "ride_along_eligible": false,
+        "ride_along_end": null
+    },
+    {
+        "sentence_index": 10,
+        "type": "replace",
+        "anchor": 0,
+        "red_end": 5,
+        "incorrect_text": "Second",
+        "correct_text": "Secondly",
+        "ride_along_eligible": false,
+        "ride_along_end": null
+    },
+    {
+        "sentence_index": 10,
+        "type": "replace",
+        "anchor": 43,
+        "red_end": 50,
+        "incorrect_text": "interest",
+        "correct_text": "interesting",
+        "ride_along_eligible": true,
+        "ride_along_end": 55
+    },
+    {
+        "sentence_index": 10,
+        "type": "replace",
+        "anchor": 55,
+        "red_end": 60,
+        "incorrect_text": "youths",
+        "correct_text": "youth",
+        "ride_along_eligible": false,
+        "ride_along_end": null
+    },
+    {
+        "sentence_index": 11,
+        "type": "replace",
+        "anchor": 14,
+        "red_end": 16,
+        "incorrect_text": "how",
+        "correct_text": "many",
+        "ride_along_eligible": false,
+        "ride_along_end": null
+    },
+    {
+        "sentence_index": 11,
+        "type": "replace",
+        "anchor": 18,
+        "red_end": 21,
+        "incorrect_text": "many",
+        "correct_text": "of my",
+        "ride_along_eligible": false,
+        "ride_along_end": null
+    },
+    {
+        "sentence_index": 11,
+        "type": "replace",
+        "anchor": 94,
+        "red_end": 99,
+        "incorrect_text": "singer",
+        "correct_text": "singers",
+        "ride_along_eligible": false,
+        "ride_along_end": null
+    },
+    {
+        "sentence_index": 12,
+        "type": "replace",
+        "anchor": 0,
+        "red_end": 4,
+        "incorrect_text": "Also,",
+        "correct_text": "They",
+        "ride_along_eligible": false,
+        "ride_along_end": null
+    },
+    {
+        "sentence_index": 12,
+        "type": "replace",
+        "anchor": 6,
+        "red_end": 9,
+        "incorrect_text": "they",
+        "correct_text": "also",
+        "ride_along_eligible": false,
+        "ride_along_end": null
+    },
+    {
+        "sentence_index": 12,
+        "type": "replace",
+        "anchor": 11,
+        "red_end": 17,
+        "incorrect_text": "collect",
+        "correct_text": "save",
+        "ride_along_eligible": true,
+        "ride_along_end": 31
+    },
+    {
+        "sentence_index": 12,
+        "type": "replace",
+        "anchor": 40,
+        "red_end": 50,
+        "incorrect_text": "other place",
+        "correct_text": "buy",
+        "ride_along_eligible": true,
+        "ride_along_end": 64
+    },
+    {
+        "sentence_index": 12,
+        "type": "replace",
+        "anchor": 64,
+        "red_end": 70,
+        "incorrect_text": "product",
+        "correct_text": "from",
+        "ride_along_eligible": false,
+        "ride_along_end": null
+    },
+    {
+        "sentence_index": 12,
+        "type": "replace",
+        "anchor": 72,
+        "red_end": 73,
+        "incorrect_text": "of",
+        "correct_text": "their",
+        "ride_along_eligible": false,
+        "ride_along_end": null
+    },
+    {
+        "sentence_index": 12,
+        "type": "replace",
+        "anchor": 75,
+        "red_end": 80,
+        "incorrect_text": "singer",
+        "correct_text": "favorite artists",
+        "ride_along_eligible": false,
+        "ride_along_end": null
+    },
+    {
+        "sentence_index": 13,
+        "type": "replace",
+        "anchor": 9,
+        "red_end": 15,
+        "incorrect_text": "trigger",
+        "correct_text": "encourage",
+        "ride_along_eligible": false,
+        "ride_along_end": null
+    },
+    {
+        "sentence_index": 13,
+        "type": "replace",
+        "anchor": 17,
+        "red_end": 22,
+        "incorrect_text": "youths",
+        "correct_text": "youth",
+        "ride_along_eligible": false,
+        "ride_along_end": null
+    },
+    {
+        "sentence_index": 13,
+        "type": "replace",
+        "anchor": 49,
+        "red_end": 65,
+        "incorrect_text": "making them to be",
+        "correct_text": "become",
+        "ride_along_eligible": true,
+        "ride_along_end": 72
+    },
+    {
+        "sentence_index": 13,
+        "type": "replace",
+        "anchor": 72,
+        "red_end": 81,
+        "incorrect_text": "socialized",
+        "correct_text": "social",
+        "ride_along_eligible": false,
+        "ride_along_end": null
+    },
+    {
+        "sentence_index": 13,
+        "type": "replace",
+        "anchor": 103,
+        "red_end": 104,
+        "incorrect_text": "to",
+        "correct_text": "for",
+        "ride_along_eligible": false,
+        "ride_along_end": null
+    },
+    {
+        "sentence_index": 13,
+        "type": "replace",
+        "anchor": 106,
+        "red_end": 110,
+        "incorrect_text": "later",
+        "correct_text": "their",
+        "ride_along_eligible": false,
+        "ride_along_end": null
+    },
+    {
+        "sentence_index": 13,
+        "type": "replace",
+        "anchor": 112,
+        "red_end": 117,
+        "incorrect_text": "on the",
+        "correct_text": "future",
+        "ride_along_eligible": false,
+        "ride_along_end": null
+    },
+    {
+        "sentence_index": 14,
+        "type": "insert",
+        "anchor": 94,
+        "correct_text": "feel",
+        "ride_along_eligible": true,
+        "ride_along_end": 105
+    },
+    {
+        "sentence_index": 14,
+        "type": "insert",
+        "anchor": 105,
+        "correct_text": "it",
+        "ride_along_eligible": false,
+        "ride_along_end": null
+    },
+    {
+        "sentence_index": 15,
+        "type": "replace",
+        "anchor": 0,
+        "red_end": 10,
+        "incorrect_text": "Like recent",
+        "correct_text": "Recently,",
+        "ride_along_eligible": false,
+        "ride_along_end": null
+    },
+    {
+        "sentence_index": 15,
+        "type": "insert",
+        "anchor": 13,
+        "correct_text": "’ve",
+        "ride_along_eligible": true,
+        "ride_along_end": 21
+    },
+    {
+        "sentence_index": 15,
+        "type": "replace",
+        "anchor": 21,
+        "red_end": 24,
+        "incorrect_text": "many",
+        "correct_text": "a lot",
+        "ride_along_eligible": true,
+        "ride_along_end": 32
+    }
+]

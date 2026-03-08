@@ -1,0 +1,17 @@
+"""
+You have the following inputs:
+
+An original (incorrect) sentence. ''
+A corrected sentence. '' 
+A diff pair from a comparison tool ( vs. ).
+Task:
+
+Analyze the diff pair in the context of both sentences.
+Check if the changed words are part of a broader language chunk that significantly alters meaning or idiomatic usage.
+If yes, identify that chunk in both the incorrect and correct versions  and  Only Output: Broader Chunk: ' ' """
+
+
+
+
+"""
+Explain why ' ' is a better choice than ' ' in the sentence: ' ' Make the explanation simple enough for a 10-year-old ESL student to understand. Use short, clear sentences and examples """

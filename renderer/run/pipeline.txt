@@ -1,0 +1,926 @@
+    #api_call 
+
+    import base64
+    from openai import OpenAI
+
+    client = OpenAI()
+
+    # Function to encode the image
+    def encode_image(image_path):
+        with open(image_path, "rb") as image_file:
+            return base64.b64encode(image_file.read()).decode('utf-8')
+        
+    #image_path = "/home/keithuncouth/Downloads/hwt_9.jpeg"
+    def perform_ocr(image_path):
+        base64_image = encode_image(image_path)
+        response = client.chat.completions.create(
+            model="gpt-4o",
+            messages=[
+                {
+                    "role": "user",
+                    "content": [
+                        {
+                            "type": "text",
+                            "text": "Extract the handwritten text from the image below. Do not include any additional information, labels, or formatting. Provide only the plain text content.",
+                        },
+                        {
+                            "type": "image_url",
+                            "image_url": {
+                                "url": f"data:image/jpeg;base64,{base64_image}"
+                            },
+                        },
+                    ],
+                }
+            ],
+            temperature=0,
+            top_p=1
+        )
+        return response.choices[0].message.content # Return the OCR text directly
+
+    # Function to correct text
+    def correct_text(ocr_text):
+        prompt = (
+            "Please correct each sentence for grammar and naturalness while maintaining the original intent and overall structure. Keep corrections simple and use casual English. Avoid using semicolons unless absolutely necessary. Do not alter or complete partial or incomplete sentences at the end of the text; leave them as they are without making assumptions."
+            f"Text to correct:\n{ocr_text}"
+        )
+        correction_response = client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[
+                {
+                    "role": "user",
+                    "content": prompt
+                }
+            ],
+            temperature=0,
+            top_p=1
+        )
+        return correction_response.choices[0].message.content  # Return the corrected text directly
+
+
+
+
+    #sequence_alignment
+
+    import re
+    from fuzzywuzzy import fuzz
+
+    def number_ocr_sentences(ocr_sentences):
+        """
+        Assigns a numerical index to each OCR sentence.
+
+        Args:
+            ocr_sentences (list[str]): A list of OCR sentences.
+
+        Returns:
+            list[tuple[int, str]]: A list of tuples, where each tuple contains:
+                - An index representing the order of the sentence.
+                - The sentence itself.
+        """
+        return [(index, sentence) for index, sentence in enumerate(ocr_sentences)]
+
+    # Define a unique marker to indicate sentence combinations
+    COMBINATION_MARKER = "^**^"
+
+    import re
+
+    def split_into_sentences(raw_text):
+        def normalize_apostrophes(text):
+            return (text.replace('‘', "'")
+                        .replace('’', "'")
+                        .replace('‛', "'")
+                        .replace('`', "'")
+                        .replace('´', "'"))
+
+        text = normalize_apostrophes(raw_text)
+        text = re.sub(r'\s+', ' ', text)
+
+        abbreviations = r'\b(?:etc|e\.g|i\.e|vs|Dr|Mr|Mrs|Ms|Prof|Jr|Sr|P\.E)'
+        # Replacing only the trailing period, not within the abbreviation
+        text = re.sub(fr'({abbreviations})\.', r'\1<PERIOD>', text)
+
+        # Preprocessing "P.E." if followed by capital letter
+        text = re.sub(r'(P\.E<PERIOD>)\s+(?=[A-Z])', r'\1\n', text)
+
+        sentence_split_pattern = r'(?<=[.!?])\s+(?=[A-Z])'
+
+        text = text.replace('\n', '. ')
+        sentences = re.split(sentence_split_pattern, text)
+
+        # Restore <PERIOD> to '.'
+        sentences = [s.replace('<PERIOD>', '.').strip() for s in sentences]
+
+        # Final cleanup step to remove unintended double periods
+        cleaned_sentences = []
+        for s in sentences:
+            # Replace multiple consecutive periods with a single period
+            s = re.sub(r'\.(\s*\.)+', '.', s)
+            cleaned_sentences.append(s)
+
+        return cleaned_sentences
+
+    def insert_marker_in_combination(first_sentence, marker=COMBINATION_MARKER):
+        """
+        Append the marker directly to the end of the first sentence.
+        """
+        return first_sentence.strip() + marker
+
+    def find_best_matches_simplified(ocr_sentences, corrected_sentences, min_score=50):
+        """
+        Matches OCR sentences with corrected sentences using simplified logic:
+        1. Single OCR sentence vs single corrected sentence.
+        2. Single OCR sentence vs two corrected sentences combined.
+        3. Two OCR sentences combined vs single corrected sentence.
+        """
+        matches = []
+        ocr_index = 0
+        corrected_index = 0
+
+        while ocr_index < len(ocr_sentences) and corrected_index < len(corrected_sentences):
+            ocr_sentence = ocr_sentences[ocr_index]
+            corrected_sentence = corrected_sentences[corrected_index]
+            
+            # Compare single vs single
+            score_single = fuzz.ratio(ocr_sentence, corrected_sentence)
+            best_score = score_single
+            best_match = (ocr_sentence, corrected_sentence)
+            increment_ocr = 1
+            increment_corrected = 1
+
+            # Compare single OCR vs two corrected combined
+            if corrected_index + 1 < len(corrected_sentences):
+                corrected_combined = corrected_sentence + " " + corrected_sentences[corrected_index + 1]
+                score_combined_corrected = fuzz.ratio(ocr_sentence, corrected_combined)
+                if score_combined_corrected > best_score and score_combined_corrected >= min_score:
+                    best_score = score_combined_corrected
+                    # Insert marker in the first corrected sentence before combining
+                    corrected_combined = insert_marker_in_combination(corrected_sentence) + " " + corrected_sentences[corrected_index + 1]
+                    best_match = (ocr_sentence, corrected_combined)
+                    increment_corrected = 2
+
+            # Compare two OCR combined vs single corrected
+            if ocr_index + 1 < len(ocr_sentences):
+                ocr_combined = ocr_sentence + " " + ocr_sentences[ocr_index + 1]
+                score_combined_ocr = fuzz.ratio(ocr_combined, corrected_sentence)
+                if score_combined_ocr > best_score and score_combined_ocr >= min_score:
+                    best_score = score_combined_ocr
+                    # Insert marker in the first OCR sentence before combining
+                    ocr_combined = insert_marker_in_combination(ocr_sentence) + " " + ocr_sentences[ocr_index + 1]
+                    best_match = (ocr_combined, corrected_sentence)
+                    increment_ocr = 2
+                    # Revert to single increment for corrected since two-ocr scenario is chosen
+                    increment_corrected = 1
+
+            matches.append(best_match)
+            ocr_index += increment_ocr
+            corrected_index += increment_corrected
+
+        # Handle remaining unmatched OCR sentences
+        while ocr_index < len(ocr_sentences):
+            matches.append((ocr_sentences[ocr_index], "NO MATCH"))
+            ocr_index += 1
+
+        return matches
+
+    def align_sentences(ocr_text, corrected_text):
+        """
+        Align OCR text with corrected text using simplified logic with combination marker.
+        """
+        ocr_sentences = split_into_sentences(ocr_text)
+        corrected_sentences = split_into_sentences(corrected_text)
+        print("Corrected Text Sentences:", corrected_sentences)
+
+        matches = find_best_matches_simplified(ocr_sentences, corrected_sentences, min_score=50)
+        return matches
+
+    if __name__ == "__main__":
+        example_ocr_text = """
+        What is your favorite subject in your school? If I ask this to my friends most of them says that it is P.E class. P.E class is the only time for students to exercise and play around during school time. It can be the best time for most of the students, but however, there are some students which don't want to exercise during P.E time. They don't want to move their body or have physical disadvantages. However, many schools are still requiring P.E and sports time. So, should sports should be required in school? I believe that it should be not required, but should be optional.
+
+    First, we should respect students' opinions. Some students want sports time. But some does not. We can't require even one side's opinion. In my school, we have selected-subject time. We can choose the class which I wants and we could also choose what sports class I could attend. And to respect each students our school made the board game class. And we could be able to just relax or play board games during sports time.
+
+    Second, it can make dark history to some students. If we play any sports, sometimes we make mistakes. But most of the students criticize the student which made a mistake. And some even bullies. When I was in middle school first grade, I was playing soccer with my classmates. I was playing as goalkeeper. But I made a mistake, and we lose one goal. Then, one of my classmate which is bully and said "Are you out of mind? Saving
+        """
+        example_corrected_text = """What is your favorite subject in school? If I ask my friends, most of them say it's P.E. P.E. class is the only time for students to exercise and have fun during school. It can be the best time for many students, but there are some who don’t want to exercise during P.E. They don’t want to move their bodies or may have physical challenges. Still, many schools require P.E. and sports time. So, should sports be required in school? I believe it shouldn’t be required but should be optional.
+
+    First, we should respect students' opinions. Some students want sports time, but some don’t. We can’t force one side’s opinion. In my school, we have selected-subject time. We can choose the classes we want, including which sports class to attend. To respect all students, our school even created a board game class, so we can relax or play board games during sports time.
+
+    Second, sports can bring up bad memories for some students. When we play sports, we sometimes make mistakes. But many students criticize those who mess up, and some even bully them. When I was in first grade in middle school, I was playing soccer with my classmates. I was the goalkeeper, but I made a mistake and we let in a goal. Then, one of my classmates, who was a bully, said, "Are you out of your mind? Saving...
+    """
+
+        aligned_pairs = align_sentences(example_ocr_text, example_corrected_text)
+
+        split_sentences = split_into_sentences(example_ocr_text)
+        list_ocr_sentences = number_ocr_sentences(split_sentences)
+        for sentence in list_ocr_sentences:
+            print(f"listed sentences: {sentence}")
+
+        for ocr_sentence, corrected_sentence in aligned_pairs:
+            print(f"OCR Sentence: {ocr_sentence}")
+            print(f"Corrected Sentence: {corrected_sentence}")
+
+    #diff_lib script
+
+    import re
+    import difflib
+    from typing import List, Tuple
+    from seq_alignment_reverse import align_sentences
+    import pickle
+
+    ANSI_COLORS = {
+        'normal': '\033[0m',
+        'red': '\033[91m',
+        'green': '\033[92m',
+        'blue': '\033[94m',
+        'pink': '\033[95;1m',
+    }
+
+
+    # Define the special marker
+    COMBINATION_MARKER = "^**^"
+
+    def remove_combination_marker(tokens: List[dict], marker: str) -> List[dict]:
+        """
+        Remove tokens matching the COMBINATION_MARKER from the token list.
+        Handles cases where the marker spans multiple tokens.
+        """
+        marker_chars = list(marker)  # ['^', '*', '*', '^']
+        filtered_tokens = []
+        i = 0
+
+        while i < len(tokens):
+            # Check if the current slice matches the marker
+            if (
+                i + len(marker_chars) <= len(tokens) and
+                all(tokens[i + j]['char'] == marker_chars[j] for j in range(len(marker_chars))) 
+            ):
+                # Skip the entire marker span
+                i += len(marker_chars)
+            else:
+                # Retain non-marker tokens
+                filtered_tokens.append(tokens[i])
+                i += 1
+
+        return filtered_tokens
+
+
+
+    # Utility functions
+    def tokenize(text: str) -> List[str]:
+        """
+        Tokenize text into words, spaces, and punctuation.
+        """
+
+        return re.findall(r"[A-Za-z]+(?:'[A-Za-z]+)*(?:\.[A-Za-z]+)*(?:[.,!?;:]+)?|\s+|[^\w\s]", text)
+
+
+    def align_and_highlight(original: List[str], corrected: List[str]) -> str:
+        """
+        Align tokens between original and corrected sentences and highlight changes.
+        """
+        sm = difflib.SequenceMatcher(None, original, corrected)
+        highlighted = []
+        for tag, i1, i2, j1, j2 in sm.get_opcodes():
+            if tag == 'equal':
+                highlighted.extend(corrected[j1:j2])
+            elif tag == 'replace':
+                highlighted.extend(f"\033[91m{token}\033[0m" for token in original[i1:i2])  # Red for deletions
+                highlighted.extend(f"\033[92m{token}\033[0m" for token in corrected[j1:j2])  # Green for additions
+            elif tag == 'delete':
+                highlighted.extend(f"\033[95;1m{token}\033[0m" for token in original[i1:i2])  # Magenta for deletions
+            elif tag == 'insert':
+                highlighted.extend(f"\033[94m{token}\033[0m" for token in corrected[j1:j2])  # Blue for additions
+        return ''.join(highlighted)
+
+
+    def normalize_apostrophes(text: str) -> str:
+        """
+        Replace curly and inconsistent apostrophes with straight apostrophes for consistent tokenization.
+        """
+        return text.replace('‘', "'").replace('’', "'").replace('‛', "'").replace('`', "'").replace('´', "'")
+
+    def highlight_changes(original: str, corrected: str) -> str:
+        """
+        Highlight differences between original and corrected sentences.
+        Ensure apostrophes are normalized before processing.
+        """
+        original = normalize_apostrophes(original)
+        corrected = normalize_apostrophes(corrected)
+        orig_tokens = tokenize(original)
+        corr_tokens = tokenize(corrected)
+        return align_and_highlight(orig_tokens, corr_tokens)
+
+
+    # Tokenizer class
+    class TextTokenizer:
+        def __init__(self, text: str):
+            """
+            Initialize the tokenizer with the input text.
+            """
+            self.text = text  # Store the input text
+            self.red_start = "\033[91m"  # Red for replaced (incorrect original)
+            self.green_start = "\033[92m"  # Green for replaced (corrected text)
+            self.blue_start = "\033[94m"  # Blue for insertions
+            self.pink_start = "\033[95;1m"  # Bright magenta (pink) for deletions
+            self.color_end = "\033[0m"  # Reset color
+            self.tokens = []
+
+        def parse_text(self) -> List[dict]:
+            """
+            Tokenizes the input text into characters with associated colors and assigns indices.
+            Ensures blue tokens remain blue, and spaces between contiguous blocks inherit the block's color.
+            """
+            pattern = re.compile(r'(\033\[\d+;?\d*m|\s+|\w+|[^\w\s])')
+            split_text = pattern.findall(self.text)
+
+            current_color = 'normal'
+            token_index = 0
+
+            for token in split_text:
+                if token == self.red_start:
+                    current_color = 'red'
+                elif token == self.green_start:
+                    current_color = 'green'
+                elif token == self.blue_start:
+                    current_color = 'blue'
+                elif token == self.pink_start:
+                    current_color = 'pink'
+                elif token == self.color_end:
+                    current_color = 'normal'
+                else:
+                    for char in token:
+                        if char == ' ':
+                            self.tokens.append({'index': token_index, 'char': char, 'color': 'normal'})
+                        else:
+                            self.tokens.append({'index': token_index, 'char': char, 'color': current_color})
+                        token_index += 1
+
+            for i in range(1, len(self.tokens) - 1):
+                current_token = self.tokens[i]
+                prev_token = self.tokens[i - 1]
+                next_token = self.tokens[i + 1]
+
+                if current_token['char'] == ' ' and prev_token['color'] == next_token['color'] and prev_token['color'] != 'normal':
+                    current_token['color'] = prev_token['color']
+
+            return self.tokens
+
+        def get_colored_text(self) -> str:
+            """
+            Reconstruct the colored text from tokens.
+            """
+            colored_text = ""
+            for token in self.tokens:
+                if token['color'] == 'red':
+                    colored_text += self.red_start + token['char'] + self.color_end
+                elif token['color'] == 'green':
+                    colored_text += self.green_start + token['char'] + self.color_end
+                elif token['color'] == 'blue':
+                    colored_text += self.blue_start + token['char'] + self.color_end
+                elif token['color'] == 'pink':
+                    colored_text += self.pink_start + token['char'] + self.color_end
+                else:
+                    colored_text += token['char']
+            return colored_text
+
+
+    # Main report generation
+    def generate_report(matches: List[Tuple[str, str]]) -> Tuple[str, List[dict]]:
+        """
+        Generate a report of changes with sentence numbers and color formatting.
+        Use TextTokenizer to clean and structure the output, removing markers and preserving formatting.
+        """
+        report = []  # To store cleaned sentences
+        tokenized_output = []  # To store tokenized sentences for further use
+
+        for num, (original, corrected) in enumerate(matches, 1):
+            # Normalize apostrophes before highlighting changes
+            original = normalize_apostrophes(original)
+            corrected = normalize_apostrophes(corrected)
+
+            # Highlight differences between original and corrected sentences
+            highlighted = highlight_changes(original, corrected)
+
+            # Use TextTokenizer to parse the highlighted text into structured tokens
+            tokenizer = TextTokenizer(highlighted)
+            tokens = tokenizer.parse_text()
+
+            # Remove the combination marker from tokens
+            filtered_tokens = remove_combination_marker(tokens, COMBINATION_MARKER)
+
+            # Rebuild the cleaned text with preserved colors
+            cleaned_highlighted = ''.join(
+                f"{ANSI_COLORS.get(token['color'], '')}{token['char']}" for token in filtered_tokens
+            )
+            cleaned_highlighted += ANSI_COLORS['normal']  # Reset color at the end
+
+            # Append the cleaned sentence to the report
+            report.append(f"Sentence {num}:\n{cleaned_highlighted}")
+
+            # Add the filtered tokens to the tokenized output for downstream processing
+            tokenized_output.append(filtered_tokens)
+
+        return "\n\n".join(report), tokenized_output
+
+
+    # Core processing functions
+    def process_text(ocr_text: str, corrected_text: str):
+        print("Aligning sentences...")
+        matches = align_sentences(ocr_text, corrected_text)
+
+        print("\nGenerating report...")
+        formatted_report, tokenized_output = generate_report(matches)  # Get tokenized_output here
+        print("\nFormatted Report:")
+        print(formatted_report)
+
+        # Add this block
+
+        with open("tokenized_output.pkl", "wb") as f:
+            pickle.dump(tokenized_output, f)
+        print("tokenized_output saved to tokenized_output.pkl")
+
+        return formatted_report
+
+
+    if __name__ == "__main__":
+        ocr_text = "Actually when I was touring around Southeast Asia, I didn't have enough time and money so, I couldn't go to Bali."
+        corrected_text = "When I was touring around Southeast Asia, I didn’t have enough time or money.^``^ So I couldn’t go to Bali."
+        
+        process_text(ocr_text, corrected_text)
+
+
+
+
+    #Block_creation
+
+    class ReplacementBlock:
+        def __init__(self, red_start, red_end, red_text, replacement_text):
+            self.type = 'replace'
+            self.red_start = red_start
+            self.red_end = red_end
+            self.red_text = red_text
+            self.replacement_text = replacement_text
+            self.ride_along_end = None
+            self.ride_along_eligible = False
+            self.adjacent_to_next = False  # Will be set later if needed
+
+    class DeleteBlock:
+        def __init__(self, pink_start):
+            self.type = 'pink'
+            self.pink_start = pink_start
+
+    def create_blocks(tokens):
+        """
+        Create blocks from tokenized text, restoring the logic that physically removes
+        green-text tokens after they've been read, thereby preserving the corrected text.
+        """
+        blocks = []
+        i = 0
+
+        while i < len(tokens):
+            if tokens[i]['color'] == 'red':
+                red_start = i
+                red_text = ""
+                replacement_text = ""
+                red_end = None
+
+                # Collect red text
+                while i < len(tokens) and tokens[i]['color'] == 'red':
+                    red_text += tokens[i]['char']
+                    red_end = i
+                    i += 1
+
+                # Collect green text (replacement)
+                if i < len(tokens) and tokens[i]['color'] == 'green':
+                    green_start = i
+                    while i < len(tokens) and tokens[i]['color'] == 'green':
+                        replacement_text += tokens[i]['char']
+                        i += 1
+
+                    # Now we remove the green segment from tokens to finalize the corrected text
+                    del tokens[green_start:i]
+                    i = green_start  # Reset i to account for the shortened tokens list
+
+                # Create replacement block
+                blocks.append(ReplacementBlock(red_start, red_end, red_text, replacement_text))
+
+            elif tokens[i]['color'] == 'pink':
+                pink_start = i
+                # Skip pink tokens
+                while i < len(tokens) and tokens[i]['color'] == 'pink':
+                    i += 1
+                blocks.append(DeleteBlock(pink_start))
+
+            else:
+                i += 1
+
+        # Adjust ride-along logic
+        for j in range(len(blocks) - 1):
+            current_block = blocks[j]
+            next_block = blocks[j + 1]
+
+            # Determine the end of the current block (red_end for replacement, pink_start for delete)
+            current_block_end = getattr(current_block, 'red_end', getattr(current_block, 'pink_start', None))
+            next_block_start = getattr(next_block, 'red_start', None)
+
+            if current_block_end is not None and next_block_start is not None:
+                distance = next_block_start - current_block_end
+                if 3 < distance <= 19:
+                    current_block.ride_along_eligible = True
+                    current_block.ride_along_end = next_block_start
+
+        print("\nCreated Blocks with Adjacency:")
+        for block in blocks:
+            print(vars(block))
+
+        return blocks
+    # renderer.py
+
+    import pickle
+    import re
+    from block_creation import ReplacementBlock, DeleteBlock
+
+
+
+    ANSI_COLORS = {
+        'normal': '\033[0m',
+        'red': '\033[31m',
+        'green': '\033[92m',
+        'blue': '\033[34m',
+        'pink': '\033[35m',
+    }
+
+    def calculate_ride_along(block, leading_edge):
+        if not block.ride_along_eligible:
+            return False
+        required_threshold = block.ride_along_end
+        return leading_edge >= required_threshold
+
+    def apply_colors(tokens):
+        """
+        After all logic, we apply ANSI codes based on token['color'].
+        """
+        colored_output = []
+        for token in tokens:
+            c = token['char']
+            col = token.get('color', 'normal')
+
+            if col == 'replacement':
+                colored_output.append(f"{ANSI_COLORS['green']}{c}{ANSI_COLORS['normal']}")
+            elif col == 'red':
+                colored_output.append(f"{ANSI_COLORS['red']}{c}{ANSI_COLORS['normal']}")
+            elif col == 'pink':
+                colored_output.append(f"{ANSI_COLORS['red']}{c}{ANSI_COLORS['normal']}")
+            else:
+                # normal or any other defaults to normal
+                colored_output.append(f"{ANSI_COLORS['normal']}{c}")
+        return "".join(colored_output)
+
+    def insert_ride_along(block, leading_edge, annotated_line, tokens, original_sentence_str):
+        """
+        Insert ride-along text into the annotated line (green) and mark it as red in the final sentence tokens.
+        """
+        if not isinstance(block, ReplacementBlock):
+            raise ValueError("Unsupported block type for ride-along")
+
+        start = block.red_end + 1
+        end = block.ride_along_end
+
+        # Extract the ride-along text
+        ride_along_text = original_sentence_str[start:end]
+
+        # Remove leading spaces from ride-along text and adjust start index
+        while ride_along_text and ride_along_text[0].isspace():
+            ride_along_text = ride_along_text[1:]
+            start += 1  # Adjust start index to match trimmed text
+
+        # Ensure the annotated_line is long enough
+        while len(annotated_line) < leading_edge:
+            annotated_line.append({'char': ' ', 'color': 'normal'})
+
+        # Add ride-along text to annotated_line (green for annotations above)
+        for char in ride_along_text:
+            annotated_line.append({'char': char, 'color': 'replacement'})
+
+        # Mark the ride-along text as red (incorrect) in the final sentence tokens
+        for i in range(start, start + len(ride_along_text)):
+            tokens[i]['color'] = 'red'
+
+        # Update leading_edge
+        leading_edge += len(ride_along_text)
+        return leading_edge
+
+    def render_corrections(tokens, blocks):
+        original_sentence_str = "".join(t['char'] for t in tokens)
+        annotated_line = []
+        leading_edge = 0
+
+        for idx, block in enumerate(blocks):
+            if hasattr(block, "processed") and block.processed:
+                continue
+
+            if isinstance(block, ReplacementBlock):
+                corrected_text = block.replacement_text
+                insertion_point = max(leading_edge, block.red_start)
+
+                # Ensure annotated_line is long enough
+                while len(annotated_line) < insertion_point:
+                    annotated_line.append({'char': ' ', 'color': 'normal'})
+
+                # Insert corrected text as replacement tokens
+                for char in corrected_text:
+                    annotated_line.append({'char': char, 'color': 'replacement'})
+
+                # Update leading_edge
+                leading_edge = insertion_point + len(corrected_text)
+
+
+                # Debug print: show substring from red_end to annotated_end
+
+
+                # If needed, add a space after corrected text if not at sentence end
+                if leading_edge < len(original_sentence_str):
+                    if original_sentence_str[leading_edge:leading_edge+1] not in ["\n"]:
+                        annotated_line.append({'char': ' ', 'color': 'normal'})
+                        leading_edge += 1
+
+                # Check ride-along
+                ride_along_required = calculate_ride_along(block, leading_edge)
+                if ride_along_required:
+                    leading_edge = insert_ride_along(block, leading_edge, annotated_line, tokens, original_sentence_str)
+                    block.annotated_end = None  # Reset annotated_end if ride-along was inserted
+
+            elif isinstance(block, DeleteBlock):
+                # If you want pink tokens in the final sentence, mark them here
+                tokens[block.pink_start]['color'] = 'pink'
+
+        # Apply colors to annotated line
+        annotated_line_colored = apply_colors(annotated_line)
+
+        # Apply colors to final sentence tokens
+        final_sentence_colored = apply_colors(tokens)
+
+        return annotated_line, tokens
+
+    def save_renderer_output(annotated_lines, final_sentences, blocks_by_sentence):
+        """
+        Cache renderer outputs for post-processing.
+        """
+        with open("renderer_output.pkl", "wb") as f:
+            pickle.dump({
+                "annotated_lines": annotated_lines,
+                "final_sentences": final_sentences,
+                "blocks_by_sentence": blocks_by_sentence
+            }, f)
+
+    def process_sentences(data_loader):
+        sentence_count = 1
+        all_annotated_lines = []
+        all_final_sentences = []
+        all_blocks = []
+
+        for tokens, blocks in data_loader:
+            annotated_line, final_sentence = render_corrections(tokens, blocks)
+            
+
+            # Collect outputs
+            all_annotated_lines.append(annotated_line)
+            all_final_sentences.append(final_sentence)
+            all_blocks.append(blocks)
+
+            # Apply colors (for display purposes)
+            annotated_line_colored = apply_colors(annotated_line)
+            final_sentence_colored = apply_colors(final_sentence)
+
+            # Print the full final outputs as before
+            print(annotated_line_colored)
+            print(final_sentence_colored)
+            print()
+
+            sentence_count += 1
+
+        # Cache the outputs for post-processing
+        save_renderer_output(all_annotated_lines, all_final_sentences, all_blocks)
+
+        print("All sentences processed and cached.")
+        return all_annotated_lines, all_final_sentences
+
+    if __name__ == "__main__":
+        # If needed, we can place code here to run process_sentences
+        # with a given data_loader or just leave it empty.
+
+    import pickle
+    from renderer import apply_colors
+
+    class Block:
+        """
+        Represents a red block and its associated replacement text.
+        """
+        def __init__(self, block_id, red_start, red_end, replacement_text=None):
+            self.block_id = block_id  # Numerical identifier
+            self.red_start = red_start
+            self.red_end = red_end
+            self.replacement_text = replacement_text if replacement_text else []
+
+        def compute_overhang(self):
+            """
+            Calculate overhang as (len(replacement_text) - block_length).
+            """
+            block_length = self.red_end - self.red_start + 1
+            # Overhang is based on how many tokens exceed the block_length
+            return max(len(self.replacement_text) - block_length, 0)
+
+        def __str__(self):
+            repl_str = "".join([t['char'] for t in self.replacement_text]) if self.replacement_text else "None"
+            return f"Block(id={self.block_id}, red_start={self.red_start}, red_end={self.red_end}, replacement_text='{repl_str}')"
+
+
+    def identify_red_blocks(final_sentence):
+        """
+        Identify red blocks allowing a single space inside the block.
+        Red tokens define a block. A single space is allowed within a block.
+        More than one consecutive space or a non-red, non-space token ends the block.
+        """
+        def is_red(token):
+            return token.get('color', 'normal') == 'red'
+        def is_space_char(token):
+            return token['char'].isspace()
+
+        def add_block(blocks, start, end):
+            if start is not None and end is not None and end >= start:
+                blocks.append({'block_start': start, 'block_end': end})
+
+        blocks = []
+        block_start = None
+        space_count = 0
+
+        for idx, token in enumerate(final_sentence):
+            if is_red(token):
+                if block_start is None:
+                    block_start = idx
+                space_count = 0
+            elif is_space_char(token):
+                space_count += 1
+                if space_count > 1:
+                    # More than one consecutive space ends the block
+                    add_block(blocks, block_start, idx - space_count)
+                    block_start = None
+                    space_count = 0
+            else:
+                # Non-red, non-space ends the block
+                add_block(blocks, block_start, idx - 1 - space_count)
+                block_start = None
+                space_count = 0
+
+        # Close any remaining block
+        add_block(blocks, block_start, len(final_sentence) - 1 - space_count)
+
+        return blocks
+
+    def get_green_search_area(red_blocks, current_block_index, annotated_line_length):
+        """
+        Determine the search area for a given red block.
+        """
+        search_start = red_blocks[current_block_index]['block_start']
+        if current_block_index + 1 < len(red_blocks):
+            search_end = red_blocks[current_block_index + 1]['block_start']
+        else:
+            search_end = annotated_line_length
+        if search_end < search_start:
+            search_end = search_start
+        return search_start, search_end
+
+    def extract_replacement_text(annotated_line, red_blocks, block_index):
+        search_start, search_end = get_green_search_area(red_blocks, block_index, len(annotated_line))
+        segment = annotated_line[search_start:search_end]
+
+        collected = []
+        consecutive_spaces = 0
+
+        for token in segment:
+            col = token.get('color', 'normal')
+            ch = token['char']
+
+            if col == 'replacement':
+                consecutive_spaces = 0
+                collected.append(token)
+            elif col == 'normal' and ch.isspace():
+                if collected:
+                    consecutive_spaces += 1
+                    if consecutive_spaces == 1:
+                        collected.append(token)
+                    else:
+                        # Two consecutive spaces -> stop collecting
+                        collected = collected[:-1]
+                        break
+                # else ignore spaces before any replacement token
+            else:
+                # Any other token breaks the sequence
+                break
+
+        # Trim trailing spaces at the end of collected tokens if any
+        while collected and collected[-1]['char'].isspace():
+            collected.pop()
+
+        return collected
+
+    def define_blocks(annotated_line, final_sentence):
+        """
+        Define red blocks and associate replacement text.
+        """
+        red_blocks = identify_red_blocks(final_sentence)
+        blocks = []
+
+        for i, rb in enumerate(red_blocks):
+            replacement_text = extract_replacement_text(annotated_line, red_blocks, i)
+            blocks.append(Block(i, rb['block_start'], rb['block_end'], replacement_text))
+
+        return blocks
+
+    def insert_spaces(final_sentence, blocks):
+        """
+        Insert spaces into the final sentence based on overhang,
+        and then adjust subsequent blocks' positions accordingly.
+        """
+        # We'll process blocks in order, updating final_sentence and subsequent blocks as we go.
+        for i, block in enumerate(blocks):
+            overhang = block.compute_overhang()
+            if overhang > 0:
+                insertion_point = block.red_end + 1
+                spaces = [{'char': ' ', 'color': 'normal'}] * overhang
+                final_sentence = final_sentence[:insertion_point] + spaces + final_sentence[insertion_point:]
+
+                # Update this block's final_sentence indices are stable, but we must shift subsequent blocks.
+                # Since we inserted 'overhang' spaces at insertion_point, all tokens after insertion_point move right.
+                # This means every subsequent block with indices beyond block.red_end must shift by 'overhang'.
+                for j in range(i + 1, len(blocks)):
+                    blocks[j].red_start += overhang
+                    blocks[j].red_end += overhang
+
+        return final_sentence
+
+
+    def place_replacement_text(blocks, annotated_line_length):
+        """
+        Place replacement text on the annotated line.
+        """
+        annotated_line = [{'char': ' ', 'color': 'normal'} for _ in range(annotated_line_length)]
+
+        for block in blocks:
+            for idx, token in enumerate(block.replacement_text):
+                target_idx = block.red_start + idx
+                if target_idx < len(annotated_line):
+                    annotated_line[target_idx] = token
+
+        return annotated_line
+
+    def finalize_transformation(annotated_lines, final_sentences):
+        """
+        Perform the final transformation for each sentence.
+        """
+        for i, (annotated_line, final_sentence) in enumerate(zip(annotated_lines, final_sentences)):
+            print(f"\n--- Sentence {i + 1} ---")
+
+            # Print initial tokens
+            print("Initial Final Sentence Tokens:")
+            for idx, tok in enumerate(final_sentence):
+                print(f"  {idx}: {tok}")
+
+            # Define blocks and associate replacement text
+            blocks = define_blocks(annotated_line, final_sentence)
+
+            # Print initial block information and overhang
+            print("Initial Blocks and Overhang:")
+            for block in blocks:
+                print(block)
+                print("Overhang:", block.compute_overhang())
+
+            # Insert spaces based on overhang
+            final_sentence = insert_spaces(final_sentence, blocks)
+
+            # Print final sentence after spaces insertion
+            print("\nFinal Sentence After Spaces Insertion:")
+            for idx, tok in enumerate(final_sentence):
+                print(f"  {idx}: {tok}")
+
+            # Print updated blocks
+            print("\nUpdated Blocks and Overhang:")
+            for block in blocks:
+                print(block)
+                print("Overhang:", block.compute_overhang())
+
+            # Place replacement text after adjusting positions
+            annotated_line = place_replacement_text(blocks, len(final_sentence))
+
+            # Print results
+            print("\nFinal Annotated Line (Colored):")
+            print(apply_colors(annotated_line))
+            # Print final sentence tokens in colored form
+            print(apply_colors(final_sentence))
+
+    if __name__ == "__main__":
+        with open("annotated_line_space_cleanup_output.pkl", "rb") as f:
+            data = pickle.load(f)
+            annotated_lines = data["annotated_lines"]
+            final_sentences = data["final_sentences"]
+
+        finalize_transformation(annotated_lines, final_sentences)

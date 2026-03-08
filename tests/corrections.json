@@ -1,0 +1,627 @@
+{
+  "sentences": [
+    {
+      "sentence_number": 1,
+      "original_sentence": "   \" I went to Southeast Asia for walking tour with my friends when I was an exchange student of University of Malaysia .",
+      "corrected_sentence": "  \" I went to Southeast Asia for a walking tour with my friends when I was an exchange student at the University of Malaysia .",
+      "corrections": [
+        {
+          "type": "replace",
+          "start": 0,
+          "end": 1,
+          "original": "  ",
+          "corrected": " ",
+          "subtype": "word"
+        },
+        {
+          "type": "insert",
+          "start": 8,
+          "corrected": "a",
+          "subtype": "word"
+        },
+        {
+          "type": "replace",
+          "start": 19,
+          "end": 20,
+          "original": "of",
+          "corrected": "at the",
+          "subtype": "word"
+        }
+      ]
+    },
+    {
+      "sentence_number": 2,
+      "original_sentence": "\" \n     \" I went to Thailand , Cambodia , Laos , Vietnam for three weeks .",
+      "corrected_sentence": "\" \n     \" I visited Thailand , Cambodia , Laos , and Vietnam for three weeks .",
+      "corrections": [
+        {
+          "type": "replace",
+          "start": 4,
+          "end": 6,
+          "original": "went to",
+          "corrected": "visited",
+          "subtype": "word"
+        },
+        {
+          "type": "insert",
+          "start": 12,
+          "corrected": "and",
+          "subtype": "word"
+        }
+      ]
+    },
+    {
+      "sentence_number": 3,
+      "original_sentence": "My favorite city among them is Chiang Mai in Thailand .",
+      "corrected_sentence": "My favorite city among them is Chiang Mai in Thailand .",
+      "corrections": []
+    },
+    {
+      "sentence_number": 4,
+      "original_sentence": "\" \n     \" The city was very calm and restfulness .",
+      "corrected_sentence": "\" \n     \" The city was very calm and restful .",
+      "corrections": [
+        {
+          "type": "replace",
+          "start": 9,
+          "end": 10,
+          "original": "restfulness",
+          "corrected": "restful",
+          "subtype": "word"
+        }
+      ]
+    },
+    {
+      "sentence_number": 5,
+      "original_sentence": "There were few people and cars in the road , so it was very quiet .",
+      "corrected_sentence": "There were few people and cars on the road , so it was very quiet .",
+      "corrections": [
+        {
+          "type": "replace",
+          "start": 6,
+          "end": 7,
+          "original": "in",
+          "corrected": "on",
+          "subtype": "word"
+        }
+      ]
+    },
+    {
+      "sentence_number": 6,
+      "original_sentence": "I stayed at Chiang Mai for three days .",
+      "corrected_sentence": "I stayed in Chiang Mai for three days .",
+      "corrections": [
+        {
+          "type": "replace",
+          "start": 2,
+          "end": 3,
+          "original": "at",
+          "corrected": "in",
+          "subtype": "word"
+        }
+      ]
+    },
+    {
+      "sentence_number": 7,
+      "original_sentence": "\" \n     \" The day , I just spent my free time for having a branch at the cafe and walking around the town in the city .",
+      "corrected_sentence": "\" \n     \" During the day , I spent my free time having brunch at a café and walking around the town .",
+      "corrections": [
+        {
+          "type": "replace",
+          "start": 3,
+          "end": 4,
+          "original": "The",
+          "corrected": "During the",
+          "subtype": "word"
+        },
+        {
+          "type": "delete",
+          "start": 7,
+          "end": 8,
+          "original": "just"
+        },
+        {
+          "type": "delete",
+          "start": 12,
+          "end": 13,
+          "original": "for"
+        },
+        {
+          "type": "insert",
+          "start": 14,
+          "corrected": "brunch at",
+          "subtype": "word"
+        },
+        {
+          "type": "replace",
+          "start": 15,
+          "end": 19,
+          "original": "branch at the cafe",
+          "corrected": "café",
+          "subtype": "word"
+        },
+        {
+          "type": "delete",
+          "start": 24,
+          "end": 27,
+          "original": "in the city"
+        }
+      ]
+    },
+    {
+      "sentence_number": 8,
+      "original_sentence": "\" \n     \" There were some Westerner , but I could not see any Korean , also Asian .",
+      "corrected_sentence": "\" \n     \" There were some Westerners , but I could not see any Koreans or other Asians .",
+      "corrections": [
+        {
+          "type": "replace",
+          "start": 6,
+          "end": 7,
+          "original": "Westerner",
+          "corrected": "Westerners",
+          "subtype": "word"
+        },
+        {
+          "type": "replace",
+          "start": 14,
+          "end": 18,
+          "original": "Korean , also Asian",
+          "corrected": "Koreans or other Asians",
+          "subtype": "word"
+        }
+      ]
+    },
+    {
+      "sentence_number": 9,
+      "original_sentence": "There were many vehicles called ' toktok ' so I took the vehicles many times during the trip .",
+      "corrected_sentence": "There were many vehicles called ' tuk - tuks , ' so I took them many times during the trip .",
+      "corrections": [
+        {
+          "type": "replace",
+          "start": 6,
+          "end": 7,
+          "original": "toktok",
+          "corrected": "tuk - tuks ,",
+          "subtype": "word"
+        },
+        {
+          "type": "replace",
+          "start": 11,
+          "end": 13,
+          "original": "the vehicles",
+          "corrected": "them",
+          "subtype": "word"
+        }
+      ]
+    },
+    {
+      "sentence_number": 10,
+      "original_sentence": "\" \n     \" Second day , I climbed a mountain and slept in a hut in the mountain .",
+      "corrected_sentence": "\" \n     \" On the second day , I climbed a mountain and slept in a hut on the mountain .",
+      "corrections": [
+        {
+          "type": "replace",
+          "start": 3,
+          "end": 4,
+          "original": "Second",
+          "corrected": "On the second",
+          "subtype": "word"
+        },
+        {
+          "type": "replace",
+          "start": 15,
+          "end": 16,
+          "original": "in",
+          "corrected": "on",
+          "subtype": "word"
+        }
+      ]
+    },
+    {
+      "sentence_number": 11,
+      "original_sentence": "It was very cold at night so my friends and I could n't sleep well .",
+      "corrected_sentence": "It was very cold at night , so my friends and I could n't sleep well .",
+      "corrections": [
+        {
+          "type": "insert",
+          "start": 6,
+          "corrected": ",",
+          "subtype": "punctuation"
+        }
+      ]
+    },
+    {
+      "sentence_number": 12,
+      "original_sentence": "\" \n     \" The last day of the trip in Chiang Mai I did rafting in the forest .",
+      "corrected_sentence": "\" \n     \" On the last day of the trip in Chiang Mai , I went rafting in the forest .",
+      "corrections": [
+        {
+          "type": "replace",
+          "start": 3,
+          "end": 4,
+          "original": "The",
+          "corrected": "On the",
+          "subtype": "word"
+        },
+        {
+          "type": "insert",
+          "start": 12,
+          "corrected": ",",
+          "subtype": "punctuation"
+        },
+        {
+          "type": "replace",
+          "start": 13,
+          "end": 14,
+          "original": "did",
+          "corrected": "went",
+          "subtype": "word"
+        }
+      ]
+    },
+    {
+      "sentence_number": 13,
+      "original_sentence": "There were six people in the boat .",
+      "corrected_sentence": "There were six people in the boat .",
+      "corrections": []
+    },
+    {
+      "sentence_number": 14,
+      "original_sentence": "The boat was swept away very fast , so it was exciting .",
+      "corrected_sentence": "The boat was swept away very quickly , so it was exciting .",
+      "corrections": [
+        {
+          "type": "replace",
+          "start": 6,
+          "end": 7,
+          "original": "fast",
+          "corrected": "quickly",
+          "subtype": "word"
+        }
+      ]
+    },
+    {
+      "sentence_number": 15,
+      "original_sentence": "\" \n     \" The last city which I visited during the trip was Hanoi in Vietnam .",
+      "corrected_sentence": "\" \n     \" The last city I visited during the trip was Hanoi in Vietnam .",
+      "corrections": [
+        {
+          "type": "delete",
+          "start": 6,
+          "end": 7,
+          "original": "which"
+        }
+      ]
+    },
+    {
+      "sentence_number": 16,
+      "original_sentence": "Actually I went to Hanoi on January .",
+      "corrected_sentence": "Actually , I went to Hanoi in January .",
+      "corrections": [
+        {
+          "type": "insert",
+          "start": 1,
+          "corrected": ",",
+          "subtype": "punctuation"
+        },
+        {
+          "type": "replace",
+          "start": 5,
+          "end": 6,
+          "original": "on",
+          "corrected": "in",
+          "subtype": "word"
+        }
+      ]
+    },
+    {
+      "sentence_number": 17,
+      "original_sentence": "\" \n     \" At that time it was quite cold weather in the city .",
+      "corrected_sentence": "\" \n     \" At that time , the weather in the city was quite cold .",
+      "corrections": [
+        {
+          "type": "replace",
+          "start": 6,
+          "end": 10,
+          "original": "it was quite cold",
+          "corrected": ", the",
+          "subtype": "punctuation"
+        },
+        {
+          "type": "insert",
+          "start": 14,
+          "corrected": "was quite cold",
+          "subtype": "word"
+        }
+      ]
+    },
+    {
+      "sentence_number": 18,
+      "original_sentence": "But my friends and I thought it was hot so we could not bring any winter clothes .",
+      "corrected_sentence": "However , my friends and I thought it would be hot , so we did not bring any winter clothes .",
+      "corrections": [
+        {
+          "type": "replace",
+          "start": 0,
+          "end": 1,
+          "original": "But",
+          "corrected": "However ,",
+          "subtype": "word"
+        },
+        {
+          "type": "replace",
+          "start": 7,
+          "end": 8,
+          "original": "was",
+          "corrected": "would be",
+          "subtype": "word"
+        },
+        {
+          "type": "insert",
+          "start": 9,
+          "corrected": ",",
+          "subtype": "punctuation"
+        },
+        {
+          "type": "replace",
+          "start": 11,
+          "end": 12,
+          "original": "could",
+          "corrected": "did",
+          "subtype": "word"
+        }
+      ]
+    },
+    {
+      "sentence_number": 19,
+      "original_sentence": "\" \n     \" When we went to the city , there were people with winter clothes , boots and earmuffs .",
+      "corrected_sentence": "\" \n     \" When we arrived in the city , we saw people wearing winter clothes , boots , and earmuffs .",
+      "corrections": [
+        {
+          "type": "replace",
+          "start": 5,
+          "end": 7,
+          "original": "went to",
+          "corrected": "arrived in",
+          "subtype": "word"
+        },
+        {
+          "type": "replace",
+          "start": 10,
+          "end": 12,
+          "original": "there were",
+          "corrected": "we saw",
+          "subtype": "word"
+        },
+        {
+          "type": "replace",
+          "start": 13,
+          "end": 14,
+          "original": "with",
+          "corrected": "wearing",
+          "subtype": "word"
+        },
+        {
+          "type": "insert",
+          "start": 18,
+          "corrected": ",",
+          "subtype": "punctuation"
+        }
+      ]
+    },
+    {
+      "sentence_number": 20,
+      "original_sentence": "We wanted to buy some winter clothes , but we did n't have much money .",
+      "corrected_sentence": "We wanted to buy some winter clothes , but we did n't have much money .",
+      "corrections": []
+    },
+    {
+      "sentence_number": 21,
+      "original_sentence": "\" \n     \" We could n't see the night view and could n't have a dinner at the nice restaurant .",
+      "corrected_sentence": "\" \n     \" We could n't see the night view and could n't have dinner at a nice restaurant .",
+      "corrections": [
+        {
+          "type": "delete",
+          "start": 14,
+          "end": 15,
+          "original": "a"
+        },
+        {
+          "type": "replace",
+          "start": 17,
+          "end": 18,
+          "original": "the",
+          "corrected": "a",
+          "subtype": "word"
+        }
+      ]
+    },
+    {
+      "sentence_number": 22,
+      "original_sentence": "Actually we planned to go Ha Long Bay",
+      "corrected_sentence": "We had actually planned to go to Ha Long Bay , but we could n't make it .",
+      "corrections": [
+        {
+          "type": "replace",
+          "start": 0,
+          "end": 2,
+          "original": "Actually we",
+          "corrected": "We had actually",
+          "subtype": "word"
+        },
+        {
+          "type": "insert",
+          "start": 5,
+          "corrected": "to",
+          "subtype": "word"
+        },
+        {
+          "type": "insert",
+          "start": 8,
+          "corrected": ", but we could n't make it .",
+          "subtype": "punctuation"
+        }
+      ]
+    },
+    {
+      "sentence_number": 23,
+      "original_sentence": "but we could n't go there .",
+      "corrected_sentence": "\" \n     \" We had to return to the hotel before dark .",
+      "corrections": [
+        {
+          "type": "replace",
+          "start": 0,
+          "end": 6,
+          "original": "but we could n't go there",
+          "corrected": "\" \n     \" We had to return to the hotel before dark",
+          "subtype": "punctuation"
+        }
+      ]
+    },
+    {
+      "sentence_number": 24,
+      "original_sentence": "\" \n     \" We should come back to the hotel before dark .",
+      "corrected_sentence": "So , if I have free time in the future , I hope to go to Hanoi again to fully enjoy the food and beautiful places .",
+      "corrections": [
+        {
+          "type": "replace",
+          "start": 0,
+          "end": 7,
+          "original": "\" \n     \" We should come back",
+          "corrected": "So , if I have free time in the future , I hope",
+          "subtype": "word"
+        },
+        {
+          "type": "insert",
+          "start": 8,
+          "corrected": "go to Hanoi again to fully enjoy",
+          "subtype": "word"
+        },
+        {
+          "type": "replace",
+          "start": 9,
+          "end": 12,
+          "original": "hotel before dark",
+          "corrected": "food and beautiful places",
+          "subtype": "word"
+        }
+      ]
+    },
+    {
+      "sentence_number": 25,
+      "original_sentence": "So if I have a free time in the future , I hope to go to Hanoi again to enjoy food and beautiful place completely .",
+      "corrected_sentence": "\" \n     \" I also want to go on a trip to Bali .",
+      "corrections": [
+        {
+          "type": "replace",
+          "start": 0,
+          "end": 2,
+          "original": "So if",
+          "corrected": "\" \n     \"",
+          "subtype": "punctuation"
+        },
+        {
+          "type": "replace",
+          "start": 3,
+          "end": 13,
+          "original": "have a free time in the future , I hope",
+          "corrected": "also want",
+          "subtype": "word"
+        },
+        {
+          "type": "insert",
+          "start": 15,
+          "corrected": "on a trip",
+          "subtype": "word"
+        },
+        {
+          "type": "replace",
+          "start": 16,
+          "end": 25,
+          "original": "Hanoi again to enjoy food and beautiful place completely",
+          "corrected": "Bali",
+          "subtype": "word"
+        }
+      ]
+    },
+    {
+      "sentence_number": 26,
+      "original_sentence": "\" \n     \" Also I want to go on a trip in Bali .",
+      "corrected_sentence": "When I was touring around Southeast Asia , I did n't have enough time or money , so I could n't go to Bali .",
+      "corrections": [
+        {
+          "type": "replace",
+          "start": 0,
+          "end": 4,
+          "original": "\" \n     \" Also",
+          "corrected": "When",
+          "subtype": "word"
+        },
+        {
+          "type": "replace",
+          "start": 5,
+          "end": 6,
+          "original": "want",
+          "corrected": "was touring around Southeast Asia , I did n't have enough time or money , so I could n't go",
+          "subtype": "word"
+        },
+        {
+          "type": "delete",
+          "start": 7,
+          "end": 12,
+          "original": "go on a trip in"
+        }
+      ]
+    },
+    {
+      "sentence_number": 27,
+      "original_sentence": "Actually when I was touring around Southeast Asia , I did n't have enough time and money so I could n't go to Bali .",
+      "corrected_sentence": "\" \n     \" Someday , I will go to the city to enjoy my holiday . \"",
+      "corrections": [
+        {
+          "type": "replace",
+          "start": 0,
+          "end": 8,
+          "original": "Actually when I was touring around Southeast Asia",
+          "corrected": "\" \n     \" Someday",
+          "subtype": "punctuation"
+        },
+        {
+          "type": "replace",
+          "start": 10,
+          "end": 21,
+          "original": "did n't have enough time and money so I could n't",
+          "corrected": "will",
+          "subtype": "word"
+        },
+        {
+          "type": "replace",
+          "start": 23,
+          "end": 24,
+          "original": "Bali",
+          "corrected": "the city to enjoy my holiday",
+          "subtype": "word"
+        },
+        {
+          "type": "insert",
+          "start": 25,
+          "corrected": "\"",
+          "subtype": "punctuation"
+        }
+      ]
+    },
+    {
+      "sentence_number": 28,
+      "original_sentence": "\" \n     \" Someday I will go to the city to enjoy my holiday . \"",
+      "corrected_sentence": "",
+      "corrections": [
+        {
+          "type": "delete",
+          "start": 0,
+          "end": 16,
+          "original": "\" \n     \" Someday I will go to the city to enjoy my holiday . \""
+        }
+      ]
+    }
+  ]
+}

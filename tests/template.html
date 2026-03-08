@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Correction Visualization</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            line-height: 1.6;
+            margin: 20px;
+        }
+        .insertion {
+            color: green;
+            text-decoration: underline;
+        }
+        .deletion {
+            color: red;
+            text-decoration: line-through;
+        }
+        .replacement {
+            position: relative;
+            display: inline-block;
+            color: red;
+            text-decoration: line-through;
+        }
+        .replacement::after {
+            content: attr(data-corrected);
+            position: absolute;
+            top: -1.5em; /* Position corrected text above */
+            left: 0;
+            background-color: #f0f0f0;
+            padding: 2px 4px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            color: green;
+            font-size: 0.9em;
+            white-space: nowrap;
+        }
+    </style>
+</head>
+<body>
+    <div id="text-container">
+        {{ content }}
+    </div>
+</body>
+</html>
