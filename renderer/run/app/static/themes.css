@@ -514,6 +514,10 @@
     color: rgba(245, 245, 245, 0.9);
   }
 
+  body.auth-mode #brand-anchor {
+    display: none;
+  }
+
   #hamburger-toggle {
     border: 0;
     background: transparent;
@@ -1037,6 +1041,7 @@
     display: inline-flex;
     align-items: center;
     gap: 2px;
+    white-space: nowrap;
   }
 
   .compose-wordmark {

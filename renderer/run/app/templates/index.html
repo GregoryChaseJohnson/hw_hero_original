@@ -1117,6 +1117,7 @@
 
     function syncAuthChrome() {
       const hamburgerAnchor = document.getElementById("hamburger-anchor");
+      const brandAnchor = document.getElementById("brand-anchor");
       const menuAnchor = document.getElementById("menu-anchor");
       const writingTabsAnchor = document.getElementById("writing-tabs-anchor");
       const sidebarPanel = document.getElementById("sidebar-panel");
@@ -1125,9 +1126,13 @@
       const sidebarAuthStatus = document.getElementById("sidebar-auth-status");
       const sidebarAuthUser = document.getElementById("sidebar-auth-user");
       const isAuthed = Boolean(authenticatedUser);
+      document.body.classList.toggle("auth-mode", !isAuthed);
 
       if (hamburgerAnchor) {
         hamburgerAnchor.hidden = !isAuthed;
+      }
+      if (brandAnchor) {
+        brandAnchor.hidden = !isAuthed;
       }
       if (sidebarAuthStatus) {
         sidebarAuthStatus.hidden = !isAuthed;
@@ -1159,6 +1164,7 @@
       const upperContainer = getUpperContainer();
       const upperScrollContent = getUpperScrollContent();
       const lowerContent = document.getElementById("lower-content");
+      const brandAnchor = document.getElementById("brand-anchor");
       const writingTabsAnchor = document.getElementById("writing-tabs-anchor");
       activeWritingLoadToken += 1;
       sentenceDataArray = [];
@@ -1174,6 +1180,10 @@
       isComposeMode = false;
       composeVisualSync = null;
 
+      document.body.classList.add("auth-mode");
+      if (brandAnchor) {
+        brandAnchor.hidden = true;
+      }
       appEl.classList.remove("compose-mode", "corrections-mode");
       appEl.classList.add("auth-mode");
       upperScrollContent.innerHTML = "";
@@ -1182,7 +1192,7 @@
         lowerContent.innerHTML = "";
       }
       if (writingTabsAnchor) {
-        writingTabsAnchor.innerHTML = '<div class="auth-title" aria-label="hwHERO"><span class="auth-title-part">hwH</span><span class="auth-title-e" aria-hidden="true"><span class="line"></span><span class="line middle"></span><span class="line"></span></span><span class="auth-title-part">RO</span></div>';
+        writingTabsAnchor.innerHTML = '<div class="auth-title" aria-label="HW Hero">HW HERO</div>';
       }
       syncPrintButtonVisibility();
       renderSavedWritingsList();
