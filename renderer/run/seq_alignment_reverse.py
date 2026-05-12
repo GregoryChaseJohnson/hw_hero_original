@@ -52,6 +52,39 @@ def insert_marker_in_combination(first_sentence, marker=COMBINATION_MARKER):
     """
     return first_sentence.strip() + marker
 
+
+def _clean_sentence_marker(text, marker=COMBINATION_MARKER):
+    return (text or "").replace(marker, "").strip()
+
+
+def _combined_scope_side(ocr_sentence, corrected_sentence, marker=COMBINATION_MARKER):
+    ocr_has_marker = marker in (ocr_sentence or "")
+    corrected_has_marker = marker in (corrected_sentence or "")
+    if ocr_has_marker and corrected_has_marker:
+        return "both"
+    if ocr_has_marker:
+        return "ocr"
+    if corrected_has_marker:
+        return "corrected"
+    return None
+
+
+def _correction_mode_for_pair(ocr_sentence, corrected_sentence, marker=COMBINATION_MARKER):
+    combined_scope_side = _combined_scope_side(ocr_sentence, corrected_sentence, marker=marker)
+    if combined_scope_side == "ocr":
+        return "join"
+    if combined_scope_side == "corrected":
+        return "split"
+    return "token_diff"
+
+
+def _alignment_record(ocr_sentence, corrected_sentence):
+    return {
+        "ocr_sentence": ocr_sentence,
+        "corrected_sentence": corrected_sentence,
+        "correction_mode": _correction_mode_for_pair(ocr_sentence, corrected_sentence),
+    }
+
 def find_best_matches_simplified(ocr_sentences, corrected_sentences, min_score=50):
     """
     Matches OCR sentences with corrected sentences using simplified logic:
@@ -70,7 +103,7 @@ def find_best_matches_simplified(ocr_sentences, corrected_sentences, min_score=5
         # Compare single vs single
         score_single = fuzz.ratio(ocr_sentence, corrected_sentence)
         best_score = score_single
-        best_match = (ocr_sentence, corrected_sentence)
+        best_match = _alignment_record(ocr_sentence, corrected_sentence)
         increment_ocr = 1
         increment_corrected = 1
 
@@ -82,7 +115,7 @@ def find_best_matches_simplified(ocr_sentences, corrected_sentences, min_score=5
                 best_score = score_combined_corrected
                 # Insert marker in the first corrected sentence before combining
                 corrected_combined = insert_marker_in_combination(corrected_sentence) + " " + corrected_sentences[corrected_index + 1]
-                best_match = (ocr_sentence, corrected_combined)
+                best_match = _alignment_record(ocr_sentence, corrected_combined)
                 increment_corrected = 2
 
         # Compare two OCR combined vs single corrected
@@ -93,7 +126,7 @@ def find_best_matches_simplified(ocr_sentences, corrected_sentences, min_score=5
                 best_score = score_combined_ocr
                 # Insert marker in the first OCR sentence before combining
                 ocr_combined = insert_marker_in_combination(ocr_sentence) + " " + ocr_sentences[ocr_index + 1]
-                best_match = (ocr_combined, corrected_sentence)
+                best_match = _alignment_record(ocr_combined, corrected_sentence)
                 increment_ocr = 2
                 # Revert to single increment for corrected since two-ocr scenario is chosen
                 increment_corrected = 1
@@ -104,7 +137,7 @@ def find_best_matches_simplified(ocr_sentences, corrected_sentences, min_score=5
 
     # Handle remaining unmatched OCR sentences
     while ocr_index < len(ocr_sentences):
-        matches.append((ocr_sentences[ocr_index], "NO MATCH"))
+        matches.append(_alignment_record(ocr_sentences[ocr_index], "NO MATCH"))
         ocr_index += 1
 
     return matches
@@ -137,7 +170,17 @@ def clean_aligned_pairs(aligned_pairs, marker=COMBINATION_MARKER):
         list[tuple[str, str]]: Cleaned aligned pairs.
     """
     cleaned_pairs = []
-    for ocr_sentence, corrected_sentence in aligned_pairs:
+    for item in aligned_pairs:
+        if isinstance(item, dict):
+            ocr_sentence = item.get("ocr_sentence", "")
+            corrected_sentence = item.get("corrected_sentence", "")
+            cleaned_pairs.append({
+                **item,
+                "ocr_sentence": ocr_sentence.replace(marker, "").strip(),
+                "corrected_sentence": corrected_sentence.replace(marker, "").strip(),
+            })
+            continue
+        ocr_sentence, corrected_sentence = item
         cleaned_ocr = ocr_sentence.replace(marker, "").strip()
         cleaned_corrected = corrected_sentence.replace(marker, "").strip()
         cleaned_pairs.append((cleaned_ocr, cleaned_corrected))
@@ -161,11 +204,23 @@ def create_sentence_mapping(aligned_pairs):
               }
     """
     mapping = {"sentences": []}
-    for idx, (ocr_sentence, corrected_sentence) in enumerate(aligned_pairs):
+    for idx, item in enumerate(aligned_pairs):
+        if isinstance(item, dict):
+            ocr_sentence = item.get("ocr_sentence", "")
+            corrected_sentence = item.get("corrected_sentence", "")
+            correction_mode = item.get("correction_mode") or _correction_mode_for_pair(ocr_sentence, corrected_sentence)
+        else:
+            ocr_sentence, corrected_sentence = item
+            correction_mode = _correction_mode_for_pair(ocr_sentence, corrected_sentence)
+        combined_scope_side = _combined_scope_side(ocr_sentence, corrected_sentence)
         mapping["sentences"].append({
             "sentence_index": idx,
-            "ocr_sentence": ocr_sentence,
-            "corrected_sentence": corrected_sentence
+            "ocr_sentence": _clean_sentence_marker(ocr_sentence),
+            "corrected_sentence": _clean_sentence_marker(corrected_sentence),
+            "is_combined_scope": combined_scope_side is not None,
+            "combined_scope_side": combined_scope_side,
+            "correction_mode": correction_mode,
+            "render_mode": "token_diff"
         })
     return mapping
 
@@ -210,6 +265,6 @@ Second, sports can bring up bad memories for some students. When we play sports,
     for sentence in list_ocr_sentences:
         print(f"listed sentences: {sentence}")
     
-    for ocr_sentence, corrected_sentence in aligned_pairs:
-        print(f"OCR Sentence: {ocr_sentence}")
-        print(f"Corrected Sentence: {corrected_sentence}")
+    for item in aligned_pairs:
+        print(f"OCR Sentence: {item['ocr_sentence']}")
+        print(f"Corrected Sentence: {item['corrected_sentence']}")

@@ -80,5 +80,5 @@ print("OCR output and corrected text have been saved to JSON files (overwritten)
 print("\nOCR Output:")
 print(ocr_output)
 
-print("\nCorrected Text:")
+print("\nMinimal edits correction:")
 print(corrected_text)

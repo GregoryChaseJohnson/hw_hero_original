@@ -51,6 +51,15 @@ def normalize_apostrophes(text: str) -> str:
                 .replace('`', "'")
                 .replace('´', "'"))
 
+
+def normalize_intraword_quote_apostrophes(text: str) -> str:
+    """
+    Convert quote artifacts that are functioning as apostrophes without touching real quotation marks.
+    """
+    text = re.sub(r'(?<=\w)"(?=\w)', "'", text)
+    return re.sub(r'(\b\w+s)"(?=\s+[A-Za-z])', r"\1'", text)
+
+
 def align_and_tokenize(original: List[str], corrected: List[str]) -> List[Dict[str, str]]:
     """
     Align tokens between original and corrected sentences and assign types:
@@ -127,8 +136,8 @@ def highlight_changes(original: str, corrected: str) -> List[Dict[str, str]]:
       then processes to identify differences.
     - Consider adding inline comments or examples for clarity.
     """
-    original = normalize_apostrophes(original)
-    corrected = normalize_apostrophes(corrected)
+    original = normalize_intraword_quote_apostrophes(normalize_apostrophes(original))
+    corrected = normalize_intraword_quote_apostrophes(normalize_apostrophes(corrected))
     orig_tokens = tokenize(original)   # returns a list of word/punctuation/space tokens
     corr_tokens = tokenize(corrected)  # same as above
 
@@ -145,7 +154,12 @@ def generate_report(matches: List[Tuple[str, str]]) -> Tuple[str, List[List[Dict
     report_lines = []
     tokenized_output = []
 
-    for num, (original, corrected) in enumerate(matches, start=1):
+    for num, item in enumerate(matches, start=1):
+        if isinstance(item, dict):
+            original = item.get("ocr_sentence", "")
+            corrected = item.get("corrected_sentence", "")
+        else:
+            original, corrected = item
         # Get typed tokens for differences
         tokens = highlight_changes(original, corrected)
         

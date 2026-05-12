@@ -11,6 +11,11 @@ load_dotenv(dotenv_path=PROJECT_ENV)
 
 client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
+OCR_EMPTY_SENTINELS = {
+    "",
+    "Please provide the text of the student essay that you would like corrected.",
+}
+
 OCR_SYSTEM_PROMPT = """
 You are a structured OCR extraction engine.
 Extract text exactly as written. Preserve line breaks and spelling.
@@ -63,53 +68,53 @@ def perform_ocr(image_path):
 
     raw = response.choices[0].message.content
     data = json.loads(raw)
-    return (data.get("student_essay") or "").strip()
+    extracted_text = (data.get("student_essay") or "").strip()
+    if extracted_text in OCR_EMPTY_SENTINELS:
+        return ""
+    return extracted_text
 
 
 # Correct Text
-def correct_text(ocr_text):
+def correct_text(source_text):
     """
     Correct the grammar and structure of OCR-generated text.
     """
-    prompt = (
-        "Correct the text below for grammar and clearly unnatural ESL usage using minimal edits.\n"
-        "Do not paraphrase or rewrite sentences.\n"
-        "Keep paragraph breaks unchanged.\n"
-        "Return only the corrected text.\n\n"
-        f"{ocr_text}"
-    )
+    normalized_source = (source_text or "").strip()
+    if not normalized_source or normalized_source in OCR_EMPTY_SENTINELS:
+        raise ValueError("No OCR text was extracted from the image.")
+
+    system_prompt = """You are an English essay correction assistant for student writing.
+
+Correct only clear errors in grammar, spelling, verb tense, subject-verb agreement, articles, prepositions, punctuation, capitalization, and word form.
+
+Preserve the student's original wording whenever it is understandable and acceptable.
+
+Do not rewrite for style, tone, fluency, vocabulary level, or preference.
+
+Do not replace acceptable words or phrases with synonyms.
+
+Do not change contractions to full forms or full forms to contractions.
+
+Do not change intensifiers or quantity phrases such as very, really, a lot of, many, much, unless the original phrase is clearly incorrect in context.
+
+When the original wording and a possible alternative are both acceptable, keep the original wording.
+
+Output only the corrected essay text with no extra words, labels, or formatting.
+
+Do not include headings, labels, numbering, bullet points, explanations, or a change list."""
+
+    user_prompt = f"Correct this student essay.\n\n{normalized_source}"
 
     response = client.chat.completions.create(
         model="gpt-4o",
         messages=[
             {
                 "role": "system",
-                "content": (
-                    "You are an ESL grammar correction engine.\n\n"
-                    "Correct grammatical errors and clearly unnatural ESL constructions\n"
-                    "while preserving the author's wording, sentence structure, and meaning.\n\n"
-                    "Allowed corrections:\n"
-                    "- grammar errors\n"
-                    "- verb tense or agreement errors\n"
-                    "- article usage (a/an/the)\n"
-                    "- prepositions\n"
-                    "- pluralization\n"
-                    "- word form errors\n"
-                    "- clearly unnatural phrasing typical of ESL writing\n\n"
-                    "Rules:\n"
-                    "- Prefer minimal edits, but adjust nearby words when needed for\ncorrect agreement, countability, or natural ESL usage.\n"
-                    "- Do not rewrite sentences unless necessary to correct an error.\n"
-                    "- Do not change the author's meaning or style.\n"
-                    "- Do not simplify or paraphrase sentences.\n"
-                    "- Preserve the original sentence structure whenever possible.\n"
-                    "- Keep paragraph breaks exactly the same.\n\n"
-                    "If a phrase is grammatically possible but clearly unnatural for standard written English, adjust it with minimal edits.\n\n"
-                    "Output only the corrected text."
-                )
+                "content": system_prompt,
             },
             {
                 "role": "user",
-                "content": prompt
+                "content": user_prompt,
             }
         ],
         temperature=0,

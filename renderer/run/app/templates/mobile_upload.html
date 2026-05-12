@@ -1,0 +1,301 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Upload Writing Photo</title>
+  <style>
+    :root {
+      color-scheme: dark;
+    }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      background: #171717;
+      color: rgba(247, 247, 247, 0.94);
+      font-family: "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 24px;
+      box-sizing: border-box;
+    }
+
+    .mobile-upload-card {
+      width: min(520px, 100%);
+      border-top: 3px solid rgba(247, 247, 247, 0.34);
+      padding: 24px 0 0;
+    }
+
+    .mobile-upload-heading {
+      margin: 0 0 10px;
+      font-size: 32px;
+      line-height: 1.05;
+      font-weight: 600;
+      color: #f7f7f7;
+    }
+
+    .mobile-upload-subheading {
+      margin: 0 0 24px;
+      font-size: 16px;
+      line-height: 1.5;
+      color: rgba(247, 247, 247, 0.64);
+    }
+
+    .mobile-upload-form {
+      display: grid;
+      gap: 14px;
+    }
+
+    .mobile-upload-actions {
+      display: grid;
+      gap: 12px;
+    }
+
+    .mobile-upload-preview {
+      display: grid;
+      gap: 12px;
+      margin-top: 8px;
+    }
+
+    .mobile-upload-preview[hidden] {
+      display: none;
+    }
+
+    .mobile-upload-preview-image {
+      width: 100%;
+      max-height: 420px;
+      object-fit: contain;
+      border-radius: 18px;
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+    }
+
+    .mobile-upload-preview-actions {
+      display: flex;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+
+    .mobile-upload-button {
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      border-radius: 999px;
+      background: rgba(255, 255, 255, 0.08);
+      color: #f7f7f7;
+      padding: 14px 18px;
+      font-size: 16px;
+      cursor: pointer;
+      text-align: center;
+    }
+
+    .mobile-upload-button.primary {
+      background: rgba(139, 201, 249, 0.18);
+      border-color: rgba(139, 201, 249, 0.34);
+    }
+
+    .mobile-upload-hidden-input {
+      display: none;
+    }
+
+    .mobile-upload-note,
+    .mobile-upload-error,
+    .mobile-upload-success {
+      font-size: 15px;
+      line-height: 1.45;
+    }
+
+    .mobile-upload-note {
+      color: rgba(247, 247, 247, 0.64);
+    }
+
+    .mobile-upload-error {
+      color: #ea8b97;
+    }
+
+    .mobile-upload-success {
+      color: #8bc9f9;
+    }
+  </style>
+</head>
+<body>
+  <section class="mobile-upload-card">
+    <h1 class="mobile-upload-heading">Upload writing photo</h1>
+    <p class="mobile-upload-subheading">{{ user }} can open the photo library or camera and upload a writing image here.</p>
+
+    {% if upload_complete %}
+      <p class="mobile-upload-success">Upload complete. You can go back to the computer and open the new writing there.</p>
+    {% else %}
+      <form class="mobile-upload-form" method="post" enctype="multipart/form-data" id="mobile-upload-form">
+        <div class="mobile-upload-actions">
+          <button class="mobile-upload-button primary" type="button" id="take-photo-button">Take photo</button>
+          <button class="mobile-upload-button" type="button" id="choose-library-button">Choose from library</button>
+        </div>
+        <input class="mobile-upload-hidden-input" type="file" name="image" id="camera-input" accept="image/*" capture="environment" />
+        <input class="mobile-upload-hidden-input" type="file" name="image" id="library-input" accept="image/*" />
+        <div class="mobile-upload-preview" id="mobile-upload-preview" hidden>
+          <img class="mobile-upload-preview-image" id="mobile-upload-preview-image" alt="Selected writing photo preview" />
+          <div class="mobile-upload-preview-actions">
+            <button class="mobile-upload-button primary" type="button" id="send-photo-button">Send photo</button>
+            <button class="mobile-upload-button" type="button" id="choose-different-photo-button">Choose different photo</button>
+          </div>
+        </div>
+      </form>
+      <p class="mobile-upload-note">Choose or take a photo first. It will preview on this page before anything is sent.</p>
+      <p class="mobile-upload-error" id="mobile-upload-error" {% if not error %}hidden{% endif %}>{{ error or "" }}</p>
+    {% endif %}
+  </section>
+  {% if not upload_complete %}
+    <script>
+      const formEl = document.getElementById("mobile-upload-form");
+      const cameraInputEl = document.getElementById("camera-input");
+      const libraryInputEl = document.getElementById("library-input");
+      const takePhotoButtonEl = document.getElementById("take-photo-button");
+      const chooseLibraryButtonEl = document.getElementById("choose-library-button");
+      const previewEl = document.getElementById("mobile-upload-preview");
+      const previewImageEl = document.getElementById("mobile-upload-preview-image");
+      const chooseDifferentPhotoButtonEl = document.getElementById("choose-different-photo-button");
+      const sendPhotoButtonEl = document.getElementById("send-photo-button");
+      const errorEl = document.getElementById("mobile-upload-error");
+      let selectedFile = null;
+      let selectedPreviewUrl = null;
+
+      const clearOtherInput = (activeInputEl) => {
+        if (activeInputEl !== cameraInputEl) {
+          cameraInputEl.value = "";
+        }
+        if (activeInputEl !== libraryInputEl) {
+          libraryInputEl.value = "";
+        }
+      };
+
+      const setError = (message) => {
+        if (!errorEl) return;
+        errorEl.textContent = message || "";
+        errorEl.hidden = !message;
+      };
+
+      const clearPreview = () => {
+        selectedFile = null;
+        if (selectedPreviewUrl) {
+          URL.revokeObjectURL(selectedPreviewUrl);
+          selectedPreviewUrl = null;
+        }
+        previewImageEl.src = "";
+        previewEl.hidden = true;
+      };
+
+      const showPreviewIfChosen = (inputEl) => {
+        if (!(inputEl && inputEl.files && inputEl.files[0])) return;
+        clearOtherInput(inputEl);
+        selectedFile = inputEl.files[0];
+        if (selectedPreviewUrl) {
+          URL.revokeObjectURL(selectedPreviewUrl);
+        }
+        selectedPreviewUrl = URL.createObjectURL(selectedFile);
+        previewImageEl.src = selectedPreviewUrl;
+        previewEl.hidden = false;
+        setError("");
+      };
+
+      const fileToJpegBlob = async (file) => {
+        if (!file) {
+          throw new Error("Photo is required.");
+        }
+        if (/^image\/(jpeg|jpg|png|webp)$/i.test(file.type) || /\.(jpe?g|png|webp)$/i.test(file.name || "")) {
+          return file;
+        }
+        const objectUrl = URL.createObjectURL(file);
+        try {
+          const image = await new Promise((resolve, reject) => {
+            const img = new Image();
+            img.onload = () => resolve(img);
+            img.onerror = () => reject(new Error("That photo format could not be opened in the browser."));
+            img.src = objectUrl;
+          });
+          const canvas = document.createElement("canvas");
+          canvas.width = image.naturalWidth || image.width;
+          canvas.height = image.naturalHeight || image.height;
+          const ctx = canvas.getContext("2d");
+          ctx.drawImage(image, 0, 0);
+          const blob = await new Promise((resolve, reject) => {
+            canvas.toBlob((result) => {
+              if (!result) {
+                reject(new Error("Could not prepare the selected photo."));
+                return;
+              }
+              resolve(result);
+            }, "image/jpeg", 0.92);
+          });
+          return blob;
+        } finally {
+          URL.revokeObjectURL(objectUrl);
+        }
+      };
+
+      const sendSelectedPhoto = async () => {
+        if (!selectedFile) {
+          setError("Photo is required.");
+          return;
+        }
+        sendPhotoButtonEl.disabled = true;
+        setError("");
+        try {
+          const uploadFile = await fileToJpegBlob(selectedFile);
+          const formData = new FormData();
+          if (uploadFile instanceof File) {
+            formData.append("image", uploadFile);
+          } else {
+            formData.append("image", uploadFile, "writing-photo.jpg");
+          }
+          const response = await fetch(window.location.href, {
+            method: "POST",
+            body: formData,
+          });
+          const html = await response.text();
+          if (!response.ok) {
+            const parser = new DOMParser();
+            const doc = parser.parseFromString(html, "text/html");
+            const errorText = doc.querySelector(".mobile-upload-error")?.textContent?.trim();
+            throw new Error(errorText || `Upload failed (${response.status})`);
+          }
+          document.open();
+          document.write(html);
+          document.close();
+        } catch (err) {
+          setError(err.message || "Failed to send photo.");
+        } finally {
+          sendPhotoButtonEl.disabled = false;
+        }
+      };
+
+      takePhotoButtonEl.addEventListener("click", () => {
+        cameraInputEl.click();
+      });
+
+      chooseLibraryButtonEl.addEventListener("click", () => {
+        libraryInputEl.click();
+      });
+
+      cameraInputEl.addEventListener("change", () => {
+        showPreviewIfChosen(cameraInputEl);
+      });
+
+      libraryInputEl.addEventListener("change", () => {
+        showPreviewIfChosen(libraryInputEl);
+      });
+
+      chooseDifferentPhotoButtonEl.addEventListener("click", () => {
+        cameraInputEl.value = "";
+        libraryInputEl.value = "";
+        clearPreview();
+        setError("");
+      });
+
+      sendPhotoButtonEl.addEventListener("click", () => {
+        sendSelectedPhoto();
+      });
+    </script>
+  {% endif %}
+</body>
+</html>

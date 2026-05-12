@@ -55,12 +55,49 @@ def _slice_tokens_by_span(tokens, start, end):
     return sliced
 
 
+def _spans_overlap(start_a, end_a, start_b, end_b):
+    return start_a < end_b and start_b < end_a
+
+
+def _owned_annotated_slice(annotated_tokens, start, end, paired_blocks):
+    """
+    Slice annotated tokens for a final sentence span while preserving correction overhang.
+    Corrected tokens from replacement blocks are owned by the final span their red block
+    overlaps, not by whatever sentence span their visual position happens to fall in.
+    """
+    ann_end = end
+    owned_ann_ranges = []
+    for ann_block, fin_block in paired_blocks:
+        fin_start = fin_block["start"]
+        fin_end = fin_block["end"] + 1
+        if _spans_overlap(fin_start, fin_end, start, end):
+            ann_start = ann_block["start"]
+            ann_stop = ann_block["end"] + 1
+            ann_end = max(ann_end, ann_stop)
+            owned_ann_ranges.append((ann_start, ann_stop))
+
+    sliced = []
+    for idx in range(start, min(ann_end, len(annotated_tokens))):
+        tok = dict(annotated_tokens[idx])
+        if tok.get("type") == "corrected":
+            is_owned = any(range_start <= idx < range_end for range_start, range_end in owned_ann_ranges)
+            if not is_owned:
+                tok = {**tok, "char": " ", "type": "equal"}
+        tok["index"] = len(sliced)
+        sliced.append(tok)
+    return sliced
+
+
 def _normalize_sentence_text(text):
     return " ".join((text or "").split())
 
 
 def _tokens_to_text(tokens):
     return _normalize_sentence_text("".join(t.get("char", "") for t in tokens))
+
+
+def _copy_mapping_entry(mapping_entry):
+    return dict(mapping_entry) if isinstance(mapping_entry, dict) else {}
 
 
 def split_for_display(annotated_lines, final_sentences, sentence_mapping):
@@ -72,13 +109,39 @@ def split_for_display(annotated_lines, final_sentences, sentence_mapping):
     split_annotated = []
     split_final = []
     split_mapping = {"sentences": []}
-    next_idx = 0
+    existing_indices = [
+        entry.get("sentence_index")
+        for entry in mapping_entries
+        if isinstance(entry, dict) and isinstance(entry.get("sentence_index"), int)
+    ]
+    next_idx = (max(existing_indices) + 1) if existing_indices else 0
 
     for i, (ann_line, fin_line) in enumerate(zip(annotated_lines, final_sentences)):
         final_text = "".join(t.get("char", "") for t in fin_line)
-        spans = _sentence_spans_from_text(final_text)
-
         mapping_entry = mapping_entries[i] if i < len(mapping_entries) else {}
+        source_sentence_index = mapping_entry.get("sentence_index", i)
+
+        if mapping_entry.get("is_combined_scope") or mapping_entry.get("correction_mode") in {"join", "split"}:
+            split_final.append(fin_line)
+            split_annotated.append(ann_line)
+            new_mapping_entry = _copy_mapping_entry(mapping_entry)
+            new_mapping_entry.update({
+                "sentence_index": source_sentence_index,
+                "source_sentence_index": source_sentence_index,
+                "render_mode": "token_diff",
+                "is_combined_scope": True,
+            })
+            split_mapping["sentences"].append(new_mapping_entry)
+            continue
+
+        spans = _sentence_spans_from_text(final_text)
+        ann_blocks, fin_blocks = detect_replacement_blocks(ann_line, fin_line)
+        paired_blocks = [
+            (ann_block, fin_block)
+            for ann_block, fin_block in zip(ann_blocks, fin_blocks)
+            if ann_block.get("block_index") is not None and fin_block.get("block_index") is not None
+        ]
+
         ocr_parts = split_into_sentences(mapping_entry.get("ocr_sentence", "")) if mapping_entry else []
         corr_parts = split_into_sentences(mapping_entry.get("corrected_sentence", "")) if mapping_entry else []
         use_ocr_parts = len(ocr_parts) == len(spans)
@@ -86,7 +149,7 @@ def split_for_display(annotated_lines, final_sentences, sentence_mapping):
 
         for part_idx, (start, end) in enumerate(spans):
             fin_seg = _slice_tokens_by_span(fin_line, start, end)
-            ann_seg = _slice_tokens_by_span(ann_line, start, end)
+            ann_seg = _owned_annotated_slice(ann_line, start, end, paired_blocks)
             split_final.append(fin_seg)
             split_annotated.append(ann_seg)
 
@@ -100,11 +163,20 @@ def split_for_display(annotated_lines, final_sentences, sentence_mapping):
             else:
                 corrected_sentence = _tokens_to_text(fin_seg)
 
-            split_mapping["sentences"].append({
-                "sentence_index": next_idx,
+            new_mapping_entry = _copy_mapping_entry(mapping_entry)
+            if len(spans) == 1 and part_idx == 0:
+                sentence_index = source_sentence_index
+            else:
+                sentence_index = next_idx
+            new_mapping_entry.update({
+                "sentence_index": sentence_index,
+                "source_sentence_index": source_sentence_index,
                 "ocr_sentence": ocr_sentence,
-                "corrected_sentence": corrected_sentence
+                "corrected_sentence": corrected_sentence,
+                "render_mode": new_mapping_entry.get("render_mode", "token_diff"),
+                "is_combined_scope": bool(new_mapping_entry.get("is_combined_scope", False)),
             })
+            split_mapping["sentences"].append(new_mapping_entry)
             next_idx += 1
 
     return split_annotated, split_final, split_mapping
@@ -282,7 +354,7 @@ def extend_final_tokens(final_tokens, up_to_index):
             final_tokens.append({"index": idx, "char": " ", "type": "equal"})
     return final_tokens
 
-def prepare_json_output(replacement_ann_blocks_all, replacement_fin_blocks_all, insert_blocks_all, delete_blocks_all, final_sentences, annotated_lines):
+def prepare_json_output(replacement_ann_blocks_all, replacement_fin_blocks_all, insert_blocks_all, delete_blocks_all, final_sentences, annotated_lines, sentence_entries=None):
     """
     Return final JSON structure with container_length and embed block metadata directly
     into both the final sentence tokens and the annotated tokens.
@@ -291,6 +363,7 @@ def prepare_json_output(replacement_ann_blocks_all, replacement_fin_blocks_all, 
     for sentence_index in range(len(final_sentences)):
         final_sentence = final_sentences[sentence_index]
         ann_line = annotated_lines[sentence_index]
+        sentence_entry = sentence_entries[sentence_index] if sentence_entries and sentence_index < len(sentence_entries) else {}
         
         # Replacement blocks for this sentence
         ann_blocks = replacement_ann_blocks_all[sentence_index]
@@ -360,7 +433,12 @@ def prepare_json_output(replacement_ann_blocks_all, replacement_fin_blocks_all, 
                                                          end_key="annotated_end")
         
         sentences_data.append({
-            "sentence_index": sentence_index,
+            "sentence_index": sentence_entry.get("sentence_index", sentence_index),
+            "render_mode": "token_diff",
+            "source_sentence_index": sentence_entry.get("source_sentence_index"),
+            "correction_mode": sentence_entry.get("correction_mode"),
+            "is_combined_scope": bool(sentence_entry.get("is_combined_scope", False)),
+            "combined_scope_side": sentence_entry.get("combined_scope_side"),
             "final_sentence_tokens": final_sentence,
             "annotated_tokens": annotated_tokens,
             "replacement_blocks": replacement_blocks,
@@ -368,8 +446,37 @@ def prepare_json_output(replacement_ann_blocks_all, replacement_fin_blocks_all, 
             "delete_blocks": delete_blocks,
             "container_length": container_len
         })
-    
+
     return {"sentences": sentences_data}
+
+
+def build_aligned_text_sentence(mapping_entry):
+    ocr_text = _normalize_sentence_text(mapping_entry.get("ocr_sentence", ""))
+    corrected_text = _normalize_sentence_text(mapping_entry.get("corrected_sentence", ""))
+    return {
+        "sentence_index": mapping_entry.get("sentence_index", 0),
+        "render_mode": "aligned_text",
+        "ocr_text": ocr_text,
+        "corrected_text": corrected_text,
+        "container_length": max(len(ocr_text), len(corrected_text), 20)
+    }
+
+
+def merge_render_payload(sentence_mapping, token_diff_output):
+    token_diff_by_index = {
+        sentence.get("sentence_index"): sentence
+        for sentence in token_diff_output.get("sentences", [])
+    }
+    merged_sentences = []
+    for mapping_entry in sentence_mapping.get("sentences", []):
+        sentence_index = mapping_entry.get("sentence_index")
+        if mapping_entry.get("render_mode") == "aligned_text":
+            merged_sentences.append(build_aligned_text_sentence(mapping_entry))
+            continue
+        token_diff_sentence = token_diff_by_index.get(sentence_index)
+        if token_diff_sentence is not None:
+            merged_sentences.append(token_diff_sentence)
+    return {"sentences": merged_sentences}
 
 if __name__ == "__main__":
     with open("final_output.pkl", "rb") as f:

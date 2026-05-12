@@ -2,33 +2,12 @@
     "sentences": [
         {
             "sentence_index": 0,
-            "ocr_sentence": "2 files changed, 0 insertions(+), 0 deletions(-) create mode 100644 renderer/run/app/__pycache__/correction_service.cpython-312.pyc create mode 100644 renderer/run/app/__pycache__/generate_explanation.cpython-312.pyc Enumerating objects: 13, done.",
-            "corrected_sentence": "2 files changed, 0 insertions(+), 0 deletions(-) create mode 100644 renderer/run/app/__pycache__/correction_service.cpython-312.pyc create mode 100644 renderer/run/app/__pycache__/generate_explanation.cpython-312.pyc Enumerating objects: 13, done."
-        },
-        {
-            "sentence_index": 1,
-            "ocr_sentence": "Counting objects: 100% (13/13), done.",
-            "corrected_sentence": "Counting objects: 100% (13/13), done."
-        },
-        {
-            "sentence_index": 2,
-            "ocr_sentence": "Delta compression using up to 24 threads Compressing objects: 100% (8/8), done.",
-            "corrected_sentence": "Delta compression using up to 24 threads Compressing objects: 100% (8/8), done."
-        },
-        {
-            "sentence_index": 3,
-            "ocr_sentence": "Writing objects: 100% (8/8), 13.53 KiB | 13.53 MiB/s, done.",
-            "corrected_sentence": "Writing objects: 100% (8/8), 13.53 KiB | 13.53 MiB/s, done."
-        },
-        {
-            "sentence_index": 4,
-            "ocr_sentence": "Total 8 (delta 5), reused 0 (delta 0), pack-reused 0 remote: Resolving deltas: 100% (5/5), completed with 5 local objects. remote: remote: GitHub found 6 vulnerabilities on GregoryChaseJohnson/hw_hero\"s default branch (5 moderate, 1 low).",
-            "corrected_sentence": "Total 8 (delta 5), reused 0 (delta 0), pack-reused 0 remote: Resolving deltas: 100% (5/5), completed with 5 local objects. remote: remote: GitHub found 6 vulnerabilities on GregoryChaseJohnson/hw_hero\"s default branch (5 moderate, 1 low)."
-        },
-        {
-            "sentence_index": 5,
-            "ocr_sentence": "To find out more, visit: remote: https://github.com/GregoryChaseJohnson/hw_hero/security/dependabot remote: To github.com:GregoryChaseJohnson/hw_hero.git f947b0f.724890c main -> main",
-            "corrected_sentence": "To find out more, visit: remote: https://github.com/GregoryChaseJohnson/hw_hero/security/dependabot remote: To github.com:GregoryChaseJohnson/hw_hero.git f947b0f.724890c main -> main"
+            "ocr_sentence": "f",
+            "corrected_sentence": "F",
+            "is_combined_scope": false,
+            "combined_scope_side": null,
+            "correction_mode": "token_diff",
+            "render_mode": "token_diff"
         }
     ]
 }

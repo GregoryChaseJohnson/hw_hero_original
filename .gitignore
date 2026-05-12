@@ -1,3 +1,23 @@
+
+
+# Secrets
 .env
 .env.*
 api_key.txt
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+
+# Virtualenvs
+venv/
+.venv/
+
+# Generated/runtime files
+uploads/
+*.pkl
+mobile_uploads.json
+saved_writings.json
+sentence_mapping.json
+output.json

@@ -200,7 +200,6 @@ def build_before_after_for_clicked_block(correction_entry, correction_block, blo
         before_tokens = [t for t in before_tokens if t.get("type") != "delete"]
     elif block_type == "delete":
         clicked_delete_id = int(correction_block.get("delete_block_index"))
-        before_tokens = _apply_replacements_with_spans(before_tokens, replacement_spans)
         before_tokens = [
             t for t in before_tokens
             if not (t.get("type") == "delete" and int(t.get("deleteBlockId", -1)) != clicked_delete_id)
@@ -226,7 +225,7 @@ def _normalize_intraword_double_quotes(text):
     normalized = re.sub(r'(\b\w+s)"(?=\s+[A-Za-z])', r"\1'", normalized)
     return normalized
 
-def get_correction_explanation(data):
+def get_correction_explanation(data, sentence_mapping_override=None, output_data_override=None):
     print("DEBUG: Function get_correction_explanation() was called")
     print("DEBUG: Received data:", data)
     sys.stdout.flush()
@@ -238,17 +237,23 @@ def get_correction_explanation(data):
         print("DEBUG: Input parsing error:", e)
         return {"error": "Invalid input", "details": str(e)}
     sentence_mapping = {"sentences": []}
-    if not os.path.exists(SENTENCE_MAPPING_PATH):
-        print(f"WARN: {SENTENCE_MAPPING_PATH} does not exist; using token-based sentence fallback")
-    if not os.path.exists(OUTPUT_JSON_PATH):
-        print(f"ERROR: {OUTPUT_JSON_PATH} does not exist")
-        return {"error": "Output file not found"}
     try:
-        if os.path.exists(SENTENCE_MAPPING_PATH):
+        if sentence_mapping_override is not None:
+            sentence_mapping = copy.deepcopy(sentence_mapping_override)
+        elif os.path.exists(SENTENCE_MAPPING_PATH):
             with open(SENTENCE_MAPPING_PATH, "r", encoding="utf-8") as f:
                 sentence_mapping = json.load(f)
-        with open(OUTPUT_JSON_PATH, "r", encoding="utf-8") as f:
-            output_data = json.load(f)
+        else:
+            print(f"WARN: {SENTENCE_MAPPING_PATH} does not exist; using token-based sentence fallback")
+
+        if output_data_override is not None:
+            output_data = copy.deepcopy(output_data_override)
+        else:
+            if not os.path.exists(OUTPUT_JSON_PATH):
+                print(f"ERROR: {OUTPUT_JSON_PATH} does not exist")
+                return {"error": "Output file not found"}
+            with open(OUTPUT_JSON_PATH, "r", encoding="utf-8") as f:
+                output_data = json.load(f)
         print(f"DEBUG: Loaded {len(sentence_mapping.get('sentences', []))} sentences")
         print(f"DEBUG: Loaded {len(output_data.get('sentences', []))} corrections")
     except Exception as e:
