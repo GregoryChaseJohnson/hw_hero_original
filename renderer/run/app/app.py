@@ -7,7 +7,7 @@ import copy
 import uuid
 import io
 import socket
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from werkzeug.utils import secure_filename
 from dotenv import load_dotenv
 from itsdangerous import URLSafeSerializer, BadSignature
@@ -25,6 +25,7 @@ SAVED_WRITINGS_PATH = os.path.join(RUN_DIR, "saved_writings.json")
 MOBILE_UPLOADS_PATH = os.path.join(RUN_DIR, "mobile_uploads.json")
 UPLOAD_DIR = os.path.join(RUN_DIR, "uploads")
 ALLOWED_IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png", ".webp"}
+MOBILE_UPLOAD_SESSION_ACTIVE_SECONDS = 45
 
 load_dotenv(PROJECT_ENV)
 
@@ -124,23 +125,76 @@ def _load_mobile_uploads_payload():
     if not isinstance(data, dict):
         return {"users": {}}
     users = data.get("users", {})
-    return {"users": users if isinstance(users, dict) else {}}
+    normalized_users = {}
+    if isinstance(users, dict):
+        for user, record in users.items():
+            normalized_users[user] = record if isinstance(record, dict) else {}
+    return {"users": normalized_users}
+
+
+def _parse_mobile_upload_timestamp(value):
+    if not isinstance(value, str) or not value:
+        return None
+    try:
+        parsed = datetime.fromisoformat(value)
+    except ValueError:
+        return None
+    if parsed.tzinfo is None:
+        return parsed.replace(tzinfo=timezone.utc)
+    return parsed.astimezone(timezone.utc)
+
+
+def _mobile_upload_record_is_active(record, now=None):
+    if not isinstance(record, dict):
+        return False
+    last_seen_at = _parse_mobile_upload_timestamp(record.get("last_seen_at"))
+    if not last_seen_at:
+        return False
+    now = now or datetime.now(timezone.utc)
+    return (now - last_seen_at) < timedelta(seconds=MOBILE_UPLOAD_SESSION_ACTIVE_SECONDS)
+
+
+def _cleanup_stale_mobile_upload_sessions(payload, now=None):
+    if not isinstance(payload, dict):
+        return False
+    users = payload.get("users")
+    if not isinstance(users, dict):
+        payload["users"] = {}
+        return False
+
+    now = now or datetime.now(timezone.utc)
+    changed = False
+    for user, record in list(users.items()):
+        if _mobile_upload_record_is_active(record, now=now):
+            continue
+        if isinstance(record, dict):
+            _delete_uploaded_file_if_present(record.get("stored_filename"))
+        users.pop(user, None)
+        changed = True
+    return changed
+
+
+def _load_mobile_uploads_payload_clean():
+    payload = _load_mobile_uploads_payload()
+    if _cleanup_stale_mobile_upload_sessions(payload):
+        _save_json_file(MOBILE_UPLOADS_PATH, payload)
+    return payload
 
 
 def _get_pending_mobile_upload(user):
-    payload = _load_mobile_uploads_payload()
+    payload = _load_mobile_uploads_payload_clean()
     record = payload["users"].get(user)
     return record if isinstance(record, dict) else None
 
 
 def _set_pending_mobile_upload(user, record):
-    payload = _load_mobile_uploads_payload()
+    payload = _load_mobile_uploads_payload_clean()
     payload["users"][user] = record
     _save_json_file(MOBILE_UPLOADS_PATH, payload)
 
 
 def _clear_pending_mobile_upload(user):
-    payload = _load_mobile_uploads_payload()
+    payload = _load_mobile_uploads_payload_clean()
     record = payload["users"].pop(user, None)
     _save_json_file(MOBILE_UPLOADS_PATH, payload)
     return record
@@ -502,6 +556,33 @@ def auth_mobile_upload_qr():
     return send_file(buffer, mimetype="image/png")
 
 
+@app.route("/auth/mobile_upload_heartbeat", methods=["POST"])
+def auth_mobile_upload_heartbeat():
+    payload = request.get_json(silent=True) or {}
+    token = str(
+        payload.get("token")
+        or request.form.get("token")
+        or request.args.get("token")
+        or ""
+    ).strip()
+    user = _load_mobile_upload_token(token)
+    if not user:
+        return jsonify({"error": "Invalid mobile upload link."}), 400
+
+    mobile_uploads = _load_mobile_uploads_payload_clean()
+    record = mobile_uploads["users"].get(user)
+    if not isinstance(record, dict):
+        record = {}
+    record["last_seen_at"] = datetime.now(timezone.utc).isoformat()
+    mobile_uploads["users"][user] = record
+    _save_json_file(MOBILE_UPLOADS_PATH, mobile_uploads)
+    return jsonify({
+        "ok": True,
+        "mobile_session_active": True,
+        "last_seen_at": record["last_seen_at"],
+    })
+
+
 @app.route("/auth/pending_mobile_upload", methods=["GET"])
 def auth_pending_mobile_upload():
     unauthorized = _require_authenticated_user()
@@ -509,13 +590,18 @@ def auth_pending_mobile_upload():
         return unauthorized
     user = _session_user()
     record = _get_pending_mobile_upload(user)
+    mobile_session_active = _mobile_upload_record_is_active(record)
     if not record:
-        return jsonify({"pending": False})
+        return jsonify({"pending": False, "mobile_session_active": mobile_session_active})
     stored_filename = record.get("stored_filename")
     if not stored_filename:
-        return jsonify({"pending": False})
+        return jsonify({
+            "pending": False,
+            "mobile_session_active": mobile_session_active,
+        })
     return jsonify({
         "pending": True,
+        "mobile_session_active": mobile_session_active,
         "image_url": url_for("uploaded_file", filename=stored_filename),
         "original_filename": record.get("original_filename", ""),
         "created_at": record.get("created_at"),
@@ -634,10 +720,12 @@ def mobile_upload_submit(token):
     os.makedirs(UPLOAD_DIR, exist_ok=True)
     image_path = os.path.join(UPLOAD_DIR, stored_filename)
     uploaded_file.save(image_path)
+    now_iso = datetime.now(timezone.utc).isoformat()
     _set_pending_mobile_upload(user, {
         "original_filename": original_filename,
         "stored_filename": stored_filename,
-        "created_at": datetime.now(timezone.utc).isoformat(),
+        "created_at": now_iso,
+        "last_seen_at": now_iso,
     })
     return render_template("mobile_upload.html", token=token, user=user, upload_complete=True)
 

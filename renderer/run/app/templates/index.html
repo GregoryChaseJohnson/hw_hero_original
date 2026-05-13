@@ -699,6 +699,14 @@
           koreanExplanationEl.hidden = !willOpen;
           koreanToggleEl.setAttribute("aria-expanded", willOpen ? "true" : "false");
           koreanToggleEl.classList.toggle("is-open", willOpen);
+          if (willOpen) {
+            window.requestAnimationFrame(() => {
+              const upperScroller = getUpperScrollContent();
+              if (upperScroller) {
+                upperScroller.scrollTop = upperScroller.scrollHeight;
+              }
+            });
+          }
         });
 
         entryEl.appendChild(koreanToggleEl);
@@ -711,6 +719,13 @@
         }
         hostEl.appendChild(entryEl);
       }
+
+      entryEl._correctionRecord = {
+        response: cloneSerializable(response) || {},
+        payload: cloneSerializable(payload) || {},
+      };
+      scheduleScrollUpperContainerToBottom();
+      persistViewState("corrections");
     }
     
     function setSelectedLowerSentenceContainer(container) {
@@ -753,6 +768,7 @@
         hostEl.appendChild(createSeparatorLine());
       }
       hostEl.appendChild(pendingEntry);
+      scheduleScrollUpperContainerToBottom();
       return pendingEntry;
     }
 
@@ -778,6 +794,20 @@
       upperScroller.scrollTo({
         top: upperScroller.scrollHeight,
         behavior,
+      });
+    }
+
+    function scheduleScrollUpperContainerToBottom(behavior = "auto") {
+      if (isRestoringViewState) return;
+      const upperScroller = getUpperScrollContent();
+      if (!upperScroller) return;
+      window.requestAnimationFrame(() => {
+        const liveScroller = getUpperScrollContent();
+        if (!liveScroller || isRestoringViewState) return;
+        liveScroller.scrollTop = liveScroller.scrollHeight;
+        if (behavior === "smooth") {
+          liveScroller.scrollTo({ top: liveScroller.scrollHeight, behavior: "smooth" });
+        }
       });
     }
 
@@ -1044,7 +1074,6 @@
       if (correctionHostEl) {
         createPendingCorrectionEntry(correctionHostEl);
       }
-      scrollUpperContainerToBottomIfNeeded("smooth");
       
       fetch('/highlight_click', {
         method: 'POST',
@@ -1066,15 +1095,6 @@
         console.log('Highlight click response:', response);
         renderCorrectionResponseIntoHost(correctionHostEl, response, payload);
         scheduleUpperPanelAutoState();
-        if (correctionHostEl) {
-          window.requestAnimationFrame(() => {
-            const allEntries = correctionHostEl.querySelectorAll(".correction-history-entry");
-            const newestEntry = allEntries[allEntries.length - 1];
-            if (newestEntry) {
-              newestEntry.scrollIntoView({ behavior: "smooth", block: "start" });
-            }
-          });
-        }
 
       })
       .catch(err => {
@@ -1099,6 +1119,7 @@
     let isComposeMode = false;
     let isUpperPopulated = false;
     let isLowerExpanded = false;
+    let suppressAutoLowerExpand = false;
     const AUTO_RECEDE_MARGIN_PX = 10;
     let upperContainerSnapshot = null;
     let composeVisualSync = null;
@@ -1114,6 +1135,157 @@
     let isPrintPreviewOpen = false;
     const AUTH_USERS = ["Cheayoon Park", "Chase Johnson"];
     let authenticatedUser = null;
+    const VIEW_STATE_STORAGE_KEY = "hwHero.viewState";
+    let isRestoringViewState = false;
+    let pendingRestoredViewState = null;
+
+    function cloneSerializable(value) {
+      if (value === null || value === undefined) return value;
+      try {
+        return JSON.parse(JSON.stringify(value));
+      } catch (err) {
+        return null;
+      }
+    }
+
+    function readViewState() {
+      try {
+        const raw = window.localStorage.getItem(VIEW_STATE_STORAGE_KEY);
+        if (!raw) return null;
+        const parsed = JSON.parse(raw);
+        if (!parsed || typeof parsed !== "object") return null;
+        return parsed;
+      } catch (err) {
+        console.error("failed to read view state:", err);
+        return null;
+      }
+    }
+
+    function writeViewState(state) {
+      try {
+        window.localStorage.setItem(VIEW_STATE_STORAGE_KEY, JSON.stringify(state));
+      } catch (err) {
+        console.error("failed to write view state:", err);
+      }
+    }
+
+    function captureViewState(modeOverride = null) {
+      const upperScroller = getUpperScrollContent();
+      const appEl = document.getElementById("app");
+      const correctionHostEl = document.querySelector(".full-writing-correction-embed");
+      const mode = modeOverride || (
+        !authenticatedUser ? "auth" :
+        isComposeMode || appEl.classList.contains("compose-mode") ? "compose" :
+        "corrections"
+      );
+      return {
+        mode,
+        writingId: activeWritingId || null,
+        lowerExpanded: Boolean(isLowerExpanded),
+        upperScrollTop: upperScroller ? upperScroller.scrollTop : 0,
+        correctionHistory: mode === "corrections" ? captureCorrectionHistory(correctionHostEl) : [],
+      };
+    }
+
+    function persistViewState(modeOverride = null) {
+      if (isRestoringViewState) return;
+      writeViewState(captureViewState(modeOverride));
+    }
+
+    function restoreScrollTop(scrollTop) {
+      const upperScroller = getUpperScrollContent();
+      if (!upperScroller) return;
+      upperScroller.scrollTop = Math.max(0, scrollTop || 0);
+    }
+
+    function captureCorrectionHistory(hostEl) {
+      if (!hostEl) return [];
+      return Array.from(hostEl.querySelectorAll(".correction-history-entry"))
+        .map((entryEl) => entryEl._correctionRecord || null)
+        .filter(Boolean)
+        .map((record) => ({
+          response: cloneSerializable(record.response) || {},
+          payload: cloneSerializable(record.payload) || {},
+        }));
+    }
+
+    function replayCorrectionHistory(hostEl, history) {
+      if (!hostEl || !Array.isArray(history) || !history.length) return;
+      hostEl.innerHTML = "";
+      history.forEach((record) => {
+        if (!record || !record.response) return;
+        renderCorrectionResponseIntoHost(
+          hostEl,
+          cloneSerializable(record.response) || {},
+          cloneSerializable(record.payload) || {},
+        );
+      });
+    }
+
+    function restoreViewState(state) {
+      const viewState = state || readViewState();
+      if (!viewState || !authenticatedUser) {
+        if (authenticatedUser) {
+          renderNewWritingHome();
+        } else {
+          renderAuthView();
+        }
+        return;
+      }
+
+      isRestoringViewState = true;
+      suppressAutoLowerExpand = true;
+      const finishRestore = () => {
+        isLowerExpanded = Boolean(viewState.lowerExpanded);
+        applyPanelState();
+        if (pendingRestoredViewState && Array.isArray(pendingRestoredViewState.correctionHistory)) {
+          const correctionHostEl = document.querySelector(".full-writing-correction-embed");
+          replayCorrectionHistory(correctionHostEl, pendingRestoredViewState.correctionHistory);
+        }
+        window.requestAnimationFrame(() => {
+          restoreScrollTop(viewState.upperScrollTop);
+          window.requestAnimationFrame(() => {
+            restoreScrollTop(viewState.upperScrollTop);
+            suppressAutoLowerExpand = false;
+            isRestoringViewState = false;
+            pendingRestoredViewState = null;
+            persistViewState("corrections");
+          });
+        });
+      };
+
+      if (viewState.mode === "corrections" && viewState.writingId) {
+        pendingRestoredViewState = viewState;
+        openSavedWriting(viewState.writingId).then((didOpen) => {
+          if (didOpen) {
+            finishRestore();
+          } else {
+            suppressAutoLowerExpand = false;
+            isRestoringViewState = false;
+            pendingRestoredViewState = null;
+            renderNewWritingHome();
+          }
+        });
+        return;
+      }
+
+      if (viewState.mode === "compose") {
+        renderNewWritingHome();
+        window.requestAnimationFrame(() => {
+          restoreScrollTop(viewState.upperScrollTop);
+          window.requestAnimationFrame(() => {
+            restoreScrollTop(viewState.upperScrollTop);
+            suppressAutoLowerExpand = false;
+            isRestoringViewState = false;
+            persistViewState("compose");
+          });
+        });
+        return;
+      }
+
+      isRestoringViewState = false;
+      renderAuthView();
+    }
 
     function syncAuthChrome() {
       const hamburgerAnchor = document.getElementById("hamburger-anchor");
@@ -1179,6 +1351,7 @@
       isEditMode = false;
       isComposeMode = false;
       composeVisualSync = null;
+      removeCorrectionsComposeClone();
 
       document.body.classList.add("auth-mode");
       if (brandAnchor) {
@@ -1196,6 +1369,7 @@
       }
       syncPrintButtonVisibility();
       renderSavedWritingsList();
+      persistViewState("auth");
 
       const shellEl = document.createElement("div");
       shellEl.className = "auth-shell";
@@ -1537,10 +1711,6 @@
       isComposeMode = false;
       composeVisualSync = null;
       mobileUploadRefreshFn = null;
-      if (mobileUploadPollTimer !== null) {
-        window.clearInterval(mobileUploadPollTimer);
-        mobileUploadPollTimer = null;
-      }
       appEl.classList.remove("compose-mode");
       if (wasComposeMode) {
         upperScrollContent.innerHTML = "";
@@ -1626,13 +1796,13 @@
     async function openSavedWriting(writingId) {
       if (!authenticatedUser) {
         renderAuthView();
-        return;
+        return false;
       }
       const loadToken = ++activeWritingLoadToken;
       const record = await fetchSavedWritingById(writingId);
-      if (!record) return;
+      if (!record) return false;
       if (loadToken !== activeWritingLoadToken) {
-        return;
+        return false;
       }
 
       sentenceDataArray = record.output_data && Array.isArray(record.output_data.sentences)
@@ -1652,6 +1822,7 @@
       isEditMode = false;
       renderFullWritingView({ syncPanelState: true });
       renderCurrentWriting();
+      persistViewState("corrections");
 
       const panel = document.getElementById("sidebar-panel");
       const scrim = document.getElementById("sidebar-scrim");
@@ -1659,6 +1830,7 @@
       panel.hidden = true;
       scrim.hidden = true;
       toggle.setAttribute("aria-expanded", "false");
+      return true;
     }
 
     function initMenu() {
@@ -1807,7 +1979,7 @@
       isUpperPopulated = Boolean(populated);
       if (!isUpperPopulated) {
         isLowerExpanded = false;
-      } else if (!wasUpperPopulated) {
+      } else if (!wasUpperPopulated && !suppressAutoLowerExpand) {
         isLowerExpanded = true;
       }
       applyPanelState();
@@ -1866,10 +2038,74 @@
 
     function initLowerToggle() {
       const toggleSurface = document.getElementById("lower-header");
+      let expandPinFrameId = null;
+      let expandPinFallbackId = null;
+      const stopExpandPin = () => {
+        if (expandPinFrameId !== null) {
+          window.cancelAnimationFrame(expandPinFrameId);
+          expandPinFrameId = null;
+        }
+        if (expandPinFallbackId !== null) {
+          window.clearTimeout(expandPinFallbackId);
+          expandPinFallbackId = null;
+        }
+        const upperScroller = getUpperScrollContent();
+        if (upperScroller) {
+          upperScroller.style.overflowAnchor = "";
+        }
+      };
+      const pinUpperToBottomDuringExpand = () => {
+        const appEl = document.getElementById("app");
+        const upperScroller = getUpperScrollContent();
+        if (!appEl || !upperScroller) return;
+
+        stopExpandPin();
+        upperScroller.style.overflowAnchor = "none";
+        upperScroller.scrollTop = upperScroller.scrollHeight;
+
+        const tick = () => {
+          const liveScroller = getUpperScrollContent();
+          if (!liveScroller) {
+            stopExpandPin();
+            return;
+          }
+          liveScroller.scrollTop = liveScroller.scrollHeight;
+          expandPinFrameId = window.requestAnimationFrame(tick);
+        };
+
+        const finish = () => {
+          appEl.removeEventListener("transitionend", onTransitionEnd);
+          const liveScroller = getUpperScrollContent();
+          stopExpandPin();
+          if (liveScroller) {
+            liveScroller.scrollTop = liveScroller.scrollHeight;
+          }
+        };
+
+        const onTransitionEnd = (event) => {
+          if (
+            event.target !== appEl ||
+            (event.propertyName !== "flex-basis" && event.propertyName !== "margin-bottom")
+          ) {
+            return;
+          }
+          finish();
+        };
+
+        appEl.addEventListener("transitionend", onTransitionEnd);
+        expandPinFrameId = window.requestAnimationFrame(tick);
+        expandPinFallbackId = window.setTimeout(finish, 260);
+      };
       const toggleLowerPanel = () => {
         if (!isUpperPopulated) return;
+        const wasExpanded = isLowerExpanded;
         isLowerExpanded = !isLowerExpanded;
         applyPanelState();
+        if (!wasExpanded && isLowerExpanded) {
+          pinUpperToBottomDuringExpand();
+        } else {
+          stopExpandPin();
+        }
       };
       toggleSurface.addEventListener("click", () => {
         toggleLowerPanel();
@@ -2197,6 +2433,7 @@
       activeReadingTab = null;
       document.getElementById("app").classList.remove("compose-mode");
       upperScrollContent.innerHTML = "";
+      removeCorrectionsComposeClone();
       upperContainer.classList.remove("full-writing-corrected", "full-writing-source");
       upperContainer.classList.add("ocr-edit-mode");
       buildSourceEditor(upperScrollContent, { showCloseButton: true });
@@ -2218,6 +2455,52 @@
       sel.addRange(range);
     }
 
+    function createCorrectionsComposeClone() {
+      const dockEl = document.createElement("div");
+      dockEl.className = "corrections-compose-clone";
+      dockEl.setAttribute("aria-hidden", "true");
+
+      const shellEl = document.createElement("div");
+      shellEl.className = "compose-input-shell corrections-compose-input-shell";
+
+      const overlayEl = document.createElement("div");
+      overlayEl.className = "compose-line-overlay";
+      const overlayContentEl = document.createElement("div");
+      overlayContentEl.className = "compose-line-overlay-content";
+      overlayEl.appendChild(overlayContentEl);
+
+      const placeholderEl = document.createElement("div");
+      placeholderEl.className = "compose-input-placeholder corrections-compose-input-placeholder";
+      placeholderEl.textContent = "Ask anything";
+
+      const inputCloneEl = document.createElement("div");
+      inputCloneEl.className = "compose-input corrections-compose-input";
+
+      const submitBtn = document.createElement("button");
+      submitBtn.className = "compose-submit-button";
+      submitBtn.type = "button";
+      submitBtn.disabled = true;
+      submitBtn.tabIndex = -1;
+      submitBtn.setAttribute("aria-hidden", "true");
+      submitBtn.innerHTML = '<svg class="compose-submit-icon-svg" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M12 20V6"/><path d="M5.5 11.25 12 5l6.5 6.25"/></svg>';
+
+      shellEl.appendChild(overlayEl);
+      shellEl.appendChild(placeholderEl);
+      shellEl.appendChild(inputCloneEl);
+      shellEl.appendChild(submitBtn);
+      dockEl.appendChild(shellEl);
+
+      return dockEl;
+    }
+
+    function removeCorrectionsComposeClone() {
+      const upperContainer = getUpperContainer();
+      const existingClone = upperContainer ? upperContainer.querySelector(".corrections-compose-clone") : null;
+      if (existingClone) {
+        existingClone.remove();
+      }
+    }
+
     function renderFullWritingView(options = {}) {
       if (!authenticatedUser) {
         renderAuthView();
@@ -2228,6 +2511,7 @@
       const upperScrollContent = getUpperScrollContent();
       const writingTabsAnchor = document.getElementById("writing-tabs-anchor");
       upperScrollContent.innerHTML = "";
+      removeCorrectionsComposeClone();
       upperContainer.classList.remove("ocr-edit-mode");
       if (writingTabsAnchor) {
         writingTabsAnchor.innerHTML = "";
@@ -2244,16 +2528,29 @@
       saveBtn.disabled = true;
       const contentEl = document.createElement("div");
       contentEl.className = "full-writing-content corrected-view";
-      const createCollapsibleSection = ({ labelText, labelClass, dividerClass }) => {
+      const createCollapsibleSection = ({ labelText, labelClass, dividerClass, copyLabel, copyText, sectionClass = "" }) => {
         const sectionEl = document.createElement("section");
         sectionEl.className = "full-writing-collapsible-section is-collapsed";
+        if (sectionClass) {
+          sectionEl.classList.add(sectionClass);
+        }
         const headerEl = document.createElement("div");
         headerEl.className = "full-writing-collapsible-header";
+        const controlsRowEl = document.createElement("div");
+        controlsRowEl.className = "full-writing-controls-row";
         const bodyEl = document.createElement("div");
         bodyEl.className = "full-writing-collapsible-body";
         const labelEl = document.createElement("div");
         labelEl.className = labelClass;
         labelEl.textContent = labelText;
+        const actionsEl = document.createElement("div");
+        actionsEl.className = "full-writing-copy-row";
+        const copyBtn = document.createElement("button");
+        copyBtn.className = "full-writing-copy-button";
+        copyBtn.type = "button";
+        copyBtn.setAttribute("aria-label", copyLabel || "Copy text");
+        copyBtn.setAttribute("title", copyLabel || "Copy text");
+        copyBtn.innerHTML = '<svg class="full-writing-copy-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M9 9.5V7.8c0-1.3 1-2.3 2.3-2.3h5.4C18 5.5 19 6.5 19 7.8v5.4c0 1.3-1 2.3-2.3 2.3H15"/><rect x="5.5" y="8.5" width="9" height="10" rx="1.8"/><path d="M8.5 12h3"/><path d="M8.5 15h5"/></svg>';
         const toggleBtn = document.createElement("button");
         toggleBtn.className = "full-writing-collapse-toggle";
         toggleBtn.type = "button";
@@ -2262,10 +2559,43 @@
         const dividerEl = document.createElement("div");
         dividerEl.className = dividerClass;
 
+        const copyToClipboard = async () => {
+          const text = typeof copyText === "function" ? copyText() : (copyText || "");
+          if (!text) return;
+          try {
+            if (navigator.clipboard && window.isSecureContext) {
+              await navigator.clipboard.writeText(text);
+            } else {
+              const tempEl = document.createElement("textarea");
+              tempEl.value = text;
+              tempEl.setAttribute("readonly", "true");
+              tempEl.style.position = "fixed";
+              tempEl.style.top = "-1000px";
+              tempEl.style.left = "-1000px";
+              document.body.appendChild(tempEl);
+              tempEl.select();
+              document.execCommand("copy");
+              document.body.removeChild(tempEl);
+            }
+            copyBtn.classList.add("is-copied");
+            copyBtn.setAttribute("aria-label", "Copied");
+            window.setTimeout(() => {
+              copyBtn.classList.remove("is-copied");
+              copyBtn.setAttribute("aria-label", copyLabel || "Copy text");
+            }, 1200);
+          } catch (err) {
+            console.error("copy failed:", err);
+          }
+        };
+
+        copyBtn.addEventListener("click", copyToClipboard);
         headerEl.appendChild(labelEl);
-        headerEl.appendChild(toggleBtn);
+        controlsRowEl.appendChild(toggleBtn);
+        actionsEl.appendChild(copyBtn);
+        controlsRowEl.appendChild(actionsEl);
         sectionEl.appendChild(headerEl);
         sectionEl.appendChild(dividerEl);
+        sectionEl.appendChild(controlsRowEl);
         sectionEl.appendChild(bodyEl);
 
         const setCollapsed = (collapsed) => {
@@ -2286,6 +2616,9 @@
           labelText: "-- Corrected Text --",
           labelClass: "full-writing-corrected-label",
           dividerClass: "full-writing-corrected-divider",
+          sectionClass: "full-writing-corrected-section",
+          copyLabel: "Copy corrected text",
+          copyText: () => correctedEl.textContent || "",
         });
         const correctedEl = document.createElement("div");
         correctedEl.className = "full-writing-corrected-text";
@@ -2296,6 +2629,14 @@
           labelText: "-- Source Text --",
           labelClass: "full-writing-source-label",
           dividerClass: "full-writing-source-divider",
+          copyLabel: "Copy source text",
+          copyText: () => {
+            const lineEls = Array.from(sourceEditorHostEl.querySelectorAll(".ocr-edit-line-text"));
+            if (lineEls.length) {
+              return lineEls.map((el) => el.textContent || "").join("\n");
+            }
+            return buildTextFromSentenceMapping(sentenceMappingArray, "ocr_sentence") || "";
+          },
         });
         const sourceEditorHostEl = document.createElement("div");
         sourceEditorHostEl.className = "full-writing-source-embed";
@@ -2307,9 +2648,9 @@
         contentEl.appendChild(correctedSection.sectionEl);
         contentEl.appendChild(sourceSection.sectionEl);
         contentEl.appendChild(correctionHostEl);
-        buildSourceEditor(sourceEditorHostEl, { saveButton: saveBtn, showInstruction: false });
-        correctedSection.setCollapsed(true);
-        sourceSection.setCollapsed(true);
+      buildSourceEditor(sourceEditorHostEl, { saveButton: saveBtn, showInstruction: false });
+      correctedSection.setCollapsed(true);
+      sourceSection.setCollapsed(true);
       };
       if (writingTabsAnchor) {
         writingTabsAnchor.appendChild(saveBtn);
@@ -2325,8 +2666,8 @@
       saveBtn.hidden = true;
       saveBtn.disabled = true;
       buildCorrectedWithSourceView();
+      upperContainer.appendChild(createCorrectionsComposeClone());
       syncTopMenuVisibility();
-      upperScrollContent.scrollTop = 0;
       if (options.syncPanelState) {
         updateUpperPanelAutoState();
       } else {
@@ -2342,10 +2683,6 @@
         renderAuthView();
         return;
       }
-      if (mobileUploadPollTimer !== null) {
-        window.clearInterval(mobileUploadPollTimer);
-        mobileUploadPollTimer = null;
-      }
       const appEl = document.getElementById("app");
       const upperContainer = getUpperContainer();
       const upperScrollContent = getUpperScrollContent();
@@ -2357,6 +2694,7 @@
       syncPrintButtonVisibility();
       setEditMenuVisibility(false);
       upperScrollContent.innerHTML = "";
+      removeCorrectionsComposeClone();
       upperContainer.classList.remove("full-writing-corrected", "full-writing-source");
       upperContainer.classList.remove("ocr-edit-mode");
 
@@ -2580,18 +2918,6 @@
         clearMobileUploadImageState();
       });
 
-      const startPendingMobileUploadPolling = () => {
-        if (mobileUploadPollTimer !== null) {
-          return;
-        }
-        mobileUploadPollTimer = window.setInterval(() => {
-          if (!isComposeMode || typeof mobileUploadRefreshFn !== "function") {
-            return;
-          }
-          mobileUploadRefreshFn();
-        }, 2000);
-      };
-
       const resizeComposeInput = () => {
         const minHeightPx = 80;
         inputEl.style.height = "auto";
@@ -2619,6 +2945,7 @@
         }
         if (mobileUploadPanelEl.hidden) {
           await showMobileUploadQrState();
+          await refreshPendingMobileUpload();
           return;
         }
         hideMobileUploadQrState();
@@ -2658,6 +2985,7 @@
           await clearPendingMobileUpload();
           clearMobileUploadImageState();
           await showMobileUploadQrState();
+          await refreshPendingMobileUpload();
         } catch (err) {
           console.error("clearPendingMobileUpload failed:", err);
         }
@@ -2671,8 +2999,6 @@
           console.error("clearPendingMobileUpload failed:", err);
         }
       });
-      refreshPendingMobileUpload();
-      startPendingMobileUploadPolling();
 
       const measureVisualLines = (text, maxWidth) => {
         if (!composeMeasureCtx || maxWidth <= 0) {
@@ -2872,6 +3198,7 @@
         inputEl.focus();
         moveCaretToStart(inputEl);
       });
+      persistViewState("compose");
     }
     
     /********************************
@@ -2925,6 +3252,7 @@
       if (isEditMode) {
         renderOcrEditView();
       }
+      persistViewState("corrections");
     }
 
     initMenu();
@@ -2940,10 +3268,11 @@
       authenticatedUser = status.authenticated ? status.user : null;
       syncAuthChrome();
       if (authenticatedUser) {
-        renderNewWritingHome();
+        restoreViewState(readViewState());
       } else {
         renderAuthView();
       }
+      initUpperScrollAutoStick();
     });
     window.addEventListener("resize", () => {
       if (!authenticatedUser) {
@@ -2966,6 +3295,9 @@
       if (isComposeMode && typeof mobileUploadRefreshFn === "function") {
         mobileUploadRefreshFn();
       }
+    });
+    window.addEventListener("beforeunload", () => {
+      persistViewState();
     });
     window.addEventListener("focus", () => {
       if (isComposeMode && typeof mobileUploadRefreshFn === "function") {

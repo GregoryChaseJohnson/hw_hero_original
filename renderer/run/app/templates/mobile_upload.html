@@ -147,6 +147,7 @@
   </section>
   {% if not upload_complete %}
     <script>
+      const heartbeatToken = {{ token|tojson }};
       const formEl = document.getElementById("mobile-upload-form");
       const cameraInputEl = document.getElementById("camera-input");
       const libraryInputEl = document.getElementById("library-input");
@@ -159,6 +160,8 @@
       const errorEl = document.getElementById("mobile-upload-error");
       let selectedFile = null;
       let selectedPreviewUrl = null;
+      let heartbeatTimer = null;
+      let heartbeatInFlight = false;
 
       const clearOtherInput = (activeInputEl) => {
         if (activeInputEl !== cameraInputEl) {
@@ -183,6 +186,49 @@
         }
         previewImageEl.src = "";
         previewEl.hidden = true;
+      };
+
+      const stopHeartbeat = () => {
+        if (heartbeatTimer !== null) {
+          window.clearInterval(heartbeatTimer);
+          heartbeatTimer = null;
+        }
+      };
+
+      const sendHeartbeat = async () => {
+        if (document.hidden || heartbeatInFlight) {
+          return;
+        }
+        heartbeatInFlight = true;
+        try {
+          await fetch("/auth/mobile_upload_heartbeat", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({ token: heartbeatToken }),
+          });
+        } catch (err) {
+          console.error("mobile upload heartbeat failed:", err);
+        } finally {
+          heartbeatInFlight = false;
+        }
+      };
+
+      const startHeartbeat = () => {
+        if (document.hidden || heartbeatTimer !== null) {
+          return;
+        }
+        sendHeartbeat();
+        heartbeatTimer = window.setInterval(sendHeartbeat, 15000);
+      };
+
+      const syncHeartbeat = () => {
+        if (document.hidden) {
+          stopHeartbeat();
+          return;
+        }
+        startHeartbeat();
       };
 
       const showPreviewIfChosen = (inputEl) => {
@@ -295,6 +341,12 @@
       sendPhotoButtonEl.addEventListener("click", () => {
         sendSelectedPhoto();
       });
+
+      document.addEventListener("visibilitychange", syncHeartbeat);
+      window.addEventListener("pagehide", stopHeartbeat);
+      window.addEventListener("beforeunload", stopHeartbeat);
+      window.addEventListener("unload", stopHeartbeat);
+      syncHeartbeat();
     </script>
   {% endif %}
 </body>

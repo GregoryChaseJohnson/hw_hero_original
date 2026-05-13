@@ -941,6 +941,7 @@
     overflow-y: scroll;
     overflow-x: hidden;
     scrollbar-gutter: stable;
+    overflow-anchor: none;
     white-space: inherit;
     color: inherit;
   }
@@ -1498,9 +1499,9 @@
 
   .full-writing-wrapper {
     display: block;
-    inline-size: 100%;
-    max-inline-size: none;
-    margin: 0;
+    inline-size: min(980px, 100%);
+    max-inline-size: min(980px, 100%);
+    margin: 0 auto;
     box-sizing: border-box;
     min-height: 100%;
     padding: 0;
@@ -1525,7 +1526,7 @@
     line-height: 1.55;
     user-select: text;
     cursor: text;
-    padding: 14px 6px 16px 6px;
+    padding: 14px 18px 16px 18px;
   }
 
   .full-writing-collapsible-section {
@@ -1536,26 +1537,70 @@
   .full-writing-collapsible-header {
     position: relative;
     display: block;
-    min-height: 30px;
-    padding: 0 94px 0 94px;
+    min-height: 0;
+    padding: 0 94px 4px 94px;
   }
 
   .full-writing-collapsible-header > .full-writing-corrected-label,
   .full-writing-collapsible-header > .full-writing-source-label {
-    position: absolute;
-    left: 50%;
-    top: 3px;
-    transform: translateX(-50%);
-    width: calc(100% - 188px);
+    position: static;
+    width: 100%;
     margin: 0;
     padding-bottom: 0;
     text-align: center;
     box-sizing: border-box;
   }
 
+  .full-writing-controls-row {
+    display: flex;
+    justify-content: flex-end;
+    margin-top: 5px;
+    gap: 6px;
+    padding: 0;
+  }
+
+  .full-writing-copy-row {
+    display: flex;
+    justify-content: flex-end;
+    padding: 0;
+  }
+
+  .full-writing-copy-button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 34px;
+    height: 34px;
+    border: 0;
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.06);
+    color: rgba(245, 245, 245, 0.84);
+    cursor: pointer;
+    box-shadow: 0 1px 8px rgba(0, 0, 0, 0.18);
+  }
+
+  .full-writing-copy-button:hover {
+    background: rgba(255, 255, 255, 0.1);
+  }
+
+  .full-writing-copy-button.is-copied {
+    background: rgba(139, 201, 249, 0.18);
+    color: #8bc9f9;
+  }
+
+  .full-writing-copy-icon {
+    width: 16px;
+    height: 16px;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 1.8;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+  }
+
   .full-writing-collapsible-body {
     position: relative;
-    padding: 14px 6px 16px 6px;
+    padding: 0 6px 16px 6px;
   }
 
   .full-writing-collapsible-section.is-collapsed .full-writing-collapsible-body {
@@ -1572,20 +1617,21 @@
     left: 0;
     right: 0;
     bottom: 0;
+    top: auto;
     height: 44px;
-    background: linear-gradient(to bottom, rgba(10, 10, 10, 0) 0%, rgba(10, 10, 10, 0.12) 58%, var(--reading-upper-container-bg) 100%);
+    background: linear-gradient(to top, var(--reading-upper-container-bg) 0%, rgba(10, 10, 10, 0.12) 42%, rgba(10, 10, 10, 0) 100%);
     pointer-events: none;
   }
 
+  .full-writing-corrected-section.is-collapsed .full-writing-collapsible-body::after {
+    background: linear-gradient(to top, var(--reading-upper-container-bg) 0%, rgba(10, 10, 10, 0.28) 44%, rgba(10, 10, 10, 0) 100%);
+  }
+
   .full-writing-collapsible-section .full-writing-collapse-toggle {
-    position: absolute;
-    right: 6px;
-    top: 50%;
-    transform: translateY(-50%);
     min-width: 96px;
+    margin: 0;
     text-align: center;
     white-space: nowrap;
-    z-index: 2;
     border: 0;
     background: rgba(255, 255, 255, 0.06);
     color: rgba(245, 245, 245, 0.84);
@@ -1605,6 +1651,30 @@
   .full-writing-content.corrected-view {
     background: transparent;
     color: inherit;
+    padding-bottom: 108px;
+  }
+
+  .corrections-compose-clone {
+    position: absolute;
+    left: 50%;
+    width: min(980px, calc(100% - 32px));
+    transform: translateX(-50%);
+    bottom: 0;
+    z-index: 9;
+    margin-top: 0;
+    padding: 3px 0 0 0;
+    background: linear-gradient(
+      to bottom,
+      rgba(10, 10, 10, 0) 0%,
+      rgba(10, 10, 10, 0.16) 20%,
+      var(--reading-upper-container-bg) 54%
+    );
+    pointer-events: none;
+  }
+
+  .corrections-compose-input-shell {
+    max-width: 100%;
+    pointer-events: none;
   }
 
   .full-writing-corrected-text {
@@ -1636,13 +1706,13 @@
 
   .full-writing-source-divider {
     height: 0;
-    margin: 0.25em 0 0.75em 0;
+    margin: 0.25em 0 0 0;
     border-top: 3px solid rgba(247, 247, 247, 0.34);
   }
 
   .full-writing-corrected-divider {
     height: 0;
-    margin: 0.25em 0 0.75em 0;
+    margin: 0.25em 0 0 0;
     border-top: 3px solid rgba(247, 247, 247, 0.34);
   }
 
@@ -1651,7 +1721,7 @@
   }
 
   .full-writing-correction-label {
-    margin: 1.35em 0 0.55em 0;
+    margin: 0.45em 0 0.45em 0;
     color: rgba(247, 242, 232, 0.72);
     font-family: "Segoe UI", "Helvetica Neue", Arial, sans-serif;
     font-size: 17px;
@@ -1663,7 +1733,7 @@
   .full-writing-correction-embed {
     margin-top: 0;
     min-height: 0;
-    padding-top: 1.75em;
+    padding-top: 0.35em;
     padding-bottom: 12px;
   }
 
@@ -2077,6 +2147,53 @@
     display: none;
   }
 
+  .corrections-compose-input-shell .compose-submit-button {
+    width: 48px;
+    height: 48px;
+    right: 10px;
+  }
+
+  .corrections-compose-input-shell .compose-submit-button .compose-submit-icon-svg {
+    width: 25px;
+    height: 25px;
+  }
+
+  .corrections-compose-input {
+    min-height: 60px;
+    padding: 18px 82px 18px 26px;
+  }
+
+  .corrections-compose-input-placeholder {
+    left: 26px;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    white-space: nowrap;
+    font-size: 22px;
+    color: rgba(236, 236, 236, 0.96);
+  }
+
+  .corrections-compose-input-placeholder::after {
+    content: "";
+    width: 2px;
+    height: 1.02em;
+    border-radius: 999px;
+    background: rgba(236, 236, 236, 0.92);
+    animation: corrections-compose-caret-blink 1.05s steps(1, end) infinite;
+  }
+
+  @keyframes corrections-compose-caret-blink {
+    0%,
+    48% {
+      opacity: 1;
+    }
+
+    50%,
+    100% {
+      opacity: 0;
+    }
+  }
+
   .ocr-edit-line {
     display: block;
     width: 100%;
@@ -2121,7 +2238,7 @@
     flex: 1 1 auto;
     overflow-y: auto;
     overflow-x: hidden;
-    background-color: #101010;
+    background-color: var(--reading-upper-container-bg);
 }
 
 #lower-container::-webkit-scrollbar {
@@ -2144,15 +2261,16 @@
 #lower-header {
     position: sticky;
     top: 0;
-    left: calc(var(--sep-left-margin) + 4px);
-    width: calc(100% - (var(--sep-left-margin) + 4px));
-    height: 14px;
-    background-color: #000000;
+    width: min(980px, 100%);
+    margin: 0 auto;
+    box-sizing: border-box;
+    height: 20px;
+    background-color: var(--reading-upper-container-bg);
     z-index: 10;
     display: flex;
     justify-content: center;
     align-items: center;
-    border-radius: 0;
+    border-bottom-left-radius: 5px;
     cursor: pointer;
 }
 
@@ -2166,10 +2284,6 @@
 
 #app:not(.upper-populated) #lower-toggle {
     display: none;
-}
-
-#app.upper-populated:not(.lower-expanded) #lower-header {
-    height: 20px;
 }
 
 #lower-toggle {
@@ -2208,6 +2322,10 @@
 }
 
 #lower-content {
+    width: min(980px, 100%);
+    max-width: min(980px, 100%);
+    margin: 0 auto;
+    box-sizing: border-box;
     padding-top: 8px;
     padding-bottom: calc(20px + 1.6em);
 }
@@ -2310,11 +2428,15 @@
     pointer-events: none;
     background: transparent;
     width: 100% !important;
+    max-width: 100%;
+    overflow-x: clip;
   }
 
   .explanation-sentence-preview .final-line,
   .explanation-sentence-preview .annotated-line {
     padding: 0;
+    box-sizing: border-box;
+    max-width: 100%;
   }
 
   .explanation-sentence-preview .highlight-box {
